@@ -1,0 +1,8 @@
+# SaharaSprout RAG — modest, laptop-friendly deps (no LangChain / no torch).
+# Inference is 100% offline; only the first index build downloads the embedding
+# model's ONNX weights, which are then cached locally.
+fastembed>=0.4        # bge-small-en-v1.5 int8 ONNX embedder (CPU, onnxruntime)
+faiss-cpu>=1.8        # dense vector index (IndexFlatIP / cosine)
+rank_bm25>=0.2        # sparse BM25 channel
+numpy>=1.24
+# requests is stdlib-adjacent and already present; the LLM client uses urllib.

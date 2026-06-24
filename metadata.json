@@ -1,0 +1,33 @@
+{
+  "team_id": "saharasprout-bench",
+  "domain": "agriculture",
+  "language_scope": ["en"],
+  "african_alpha_claim": false,
+  "budget_laptop_claim": true,
+  "submitter": {
+    "name": "Geitodyu Henrique Crusoe",
+    "email": "bench@saharasprout.example",
+    "github_handle": "saharasprout"
+  },
+  "cross_disciplinary_pairing": {
+    "discipline": "agriculture",
+    "load_bearing": true,
+    "description": "AgriDoc pairs a LoRA-fine-tuned Qwen2.5-1.5B (taught extension-officer reasoning: commit when clear, give a differential when the pattern is ambiguous, refuse pesticide/drug doses, redirect non-poultry livestock to a vet) with load-bearing RAG over a local crop/livestock corpus: the app retrieves and computes grounding from cosine similarity, and every cause is labelled library-backed vs reasoned. Fully offline on an 8 GB laptop via llama.cpp."
+  },
+  "test_prompts": [
+    { "prompt_id": "tp_001", "prompt": "My maize leaves have pale streaks running along the veins and growth is stunted. What is the likely cause and what should I do?" },
+    { "prompt_id": "tp_002", "prompt": "My chickens are coughing, have runny eyes, and a few have died suddenly. What could this be and how should I respond?" }
+  ],
+  "model": {
+    "name": "AgriDoc-Qwen2.5-1.5B-Q4_0",
+    "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+    "fine_tuned": true,
+    "runtime": "llama.cpp",
+    "quantization": "GGUF Q4_0",
+    "parameters_estimate": "1.5B",
+    "packaging": "binary_bundle"
+  },
+  "_runtime": {
+    "model_path": "model/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf"
+  }
+}

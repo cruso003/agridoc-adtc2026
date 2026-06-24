@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriDoc — Field Advisory Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --spine:#1B3826;--spine-2:#234730;--green:#2F6B43;--green-d:#234E36;--green-t:#E6EFDC;
+    --amber:#BE7A2C;--amber-d:#8F5A1C;--amber-t:#F2E6CE;--terra:#A8492A;--terra-t:#F0DDD4;
+    --blue:#3B6080;--blue-t:#DEE8F0;--paper:#F1EBDD;--card:#FCF9F2;--ink:#221F16;
+    --muted:#6E6856;--line:#E1D8C4;--line-2:#ECE4D3;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink)}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .serif{font-family:'Spectral',serif}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-thumb{background:#cdbfa3;border-radius:8px;border:3px solid transparent;background-clip:content-box}
+  @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .print-doc{display:none}
+  @media print{
+    .no-print{display:none!important}
+    body *{visibility:hidden}
+    .print-doc{display:block!important;visibility:visible;position:absolute;top:0;left:0;width:100%}
+    .print-doc *{visibility:visible}
+    @page{margin:14mm}
+  }
+  #root{display:flex;height:100vh;min-height:600px;overflow:hidden}
+  button{font:inherit;cursor:pointer}
+  input,textarea{font:inherit}
+  .paper-bg{background-color:var(--paper);background-image:radial-gradient(rgba(120,98,52,.05) 1px,transparent 1px);background-size:22px 22px}
+  /* logo */
+  .logo{position:relative;border-radius:11px;background:var(--paper);flex:none}
+  .logo .stem{position:absolute;left:50%;bottom:24%;width:5%;background:var(--green);border-radius:2px;transform:translateX(-50%)}
+  .logo .lf1{position:absolute;left:22%;top:28%;width:28%;height:28%;background:var(--green);border-radius:0 100% 0 100%;transform:rotate(-14deg)}
+  .logo .lf2{position:absolute;right:22%;top:28%;width:28%;height:28%;background:var(--amber);border-radius:100% 0 100% 0;transform:rotate(14deg)}
+  /* chips/buttons */
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:13.5px;font-weight:500}
+  .chip.on{border-color:var(--green);background:var(--green-t);color:var(--green-d);font-weight:600}
+  .pill{font-size:10px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:6px;font-family:'IBM Plex Mono',monospace}
+  .card{border:1px solid var(--line);background:var(--card);border-radius:16px}
+  .btn-green{background:var(--green);color:#fff;border:none;border-radius:12px;padding:13px 20px;font-size:15px;font-weight:600;box-shadow:0 2px 8px rgba(35,78,54,.25)}
+  .btn-green:hover{background:var(--green-d)}
+  .btn-amber{background:var(--amber);color:#2A1B08;border:none;border-radius:11px;padding:12px;font-size:14px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  .btn-ghost{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 17px;font-size:13.5px;color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--green);color:var(--green-d)}
+  .nav{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:transparent;border:none;border-radius:10px;padding:10px 11px;font-size:14px;font-weight:500;color:#C8D1C2}
+  .nav.on{background:rgba(255,255,255,.10);color:#FBF7EC;font-weight:600}
+  .nav:hover{background:rgba(255,255,255,.06)}
+  .check{width:21px;height:21px;flex:none;border-radius:6px;border:2px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+  .check.on{background:var(--green);border-color:var(--green)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+//==================== state + persistence ====================
+const API = localStorage.getItem('agridoc_api') || 'http://127.0.0.1:8000';
+// quick-picks = the crops/animals the local library covers best (grounded answers).
+// Users can add any other crop/animal too — diagnosis is never restricted to this list.
+const CROPS = [['maize','Maize'],['cassava','Cassava'],['tomato','Tomato'],['banana','Banana'],['plantain','Plantain'],
+  ['soybean','Soybean / beans'],['sweet_potato','Sweet potato'],['yam','Yam'],['pepper','Pepper'],['cucumber','Cucumber'],
+  ['okra','Okra'],['carrot','Carrot'],['watermelon','Watermelon'],['fruit_trees','Fruit trees / citrus'],['poultry','Poultry']];
+const cropLabel = id => (CROPS.find(c=>c[0]===id)||[])[1] || id;
+const STAGES = ['Seedling','Vegetative','Flowering','Maturity / harvest'];
+const COUNTRIES = ['Algeria','Angola','Benin','Botswana','Burkina Faso','Burundi','Cameroon','Cabo Verde','Central African Republic','Chad','Comoros','Congo (Brazzaville)','Congo (DRC)','Côte d\'Ivoire','Djibouti','Egypt','Equatorial Guinea','Eritrea','Eswatini','Ethiopia','Gabon','Gambia','Ghana','Guinea','Guinea-Bissau','Kenya','Lesotho','Liberia','Libya','Madagascar','Malawi','Mali','Mauritania','Mauritius','Morocco','Mozambique','Namibia','Niger','Nigeria','Rwanda','São Tomé and Príncipe','Senegal','Seychelles','Sierra Leone','Somalia','South Africa','South Sudan','Sudan','Tanzania','Togo','Tunisia','Uganda','Zambia','Zimbabwe'];
+const PARTS = ['Leaves','Stem','Roots / tubers','Fruit / cob','Whole plant','Birds / animals'];
+const T = {greeting:()=>{const h=new Date().getHours();return h<12?'Good morning':h<17?'Good afternoon':'Good evening'}};
+
+function load(){ try{return JSON.parse(localStorage.getItem('agridoc'))||{}}catch(e){return {}} }
+const saved = load();
+let S = {
+  screen: saved.user ? 'home' : 'onboarding',
+  ob: 0,
+  user: saved.user || {name:'',role:'',region:'',crops:[],lang:'en'},
+  cases: saved.cases || [],
+  intake: {crop:'',stage:'',part:'',symptom:''},
+  dx: null, dxState:'empty', dxOpen:{}, srcOpen:{}, ticks:{}, error:'', live:'',
+};
+function persist(){ localStorage.setItem('agridoc', JSON.stringify({user:S.user, cases:S.cases})) }
+const esc = s => (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const initials = n => (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';
+const ASOF = 'mid-2026';   // knowledge snapshot (model + bundled reference notes); fully offline, no live updates
+function go(screen){ S.screen=screen; S.error=''; render(); }
+
+//==================== API ====================
+async function apiPost(path, body){
+  const r = await fetch(API+path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok){ const e=await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error||('HTTP '+r.status)); }
+  return r.json();
+}
+
+// live reasoning view: strip the THINKING: label, and once the structured part
+// begins (CAUSE:) show only the reasoning + a "drafting" note.
+function liveText(raw){
+  let t=(raw||'').replace(/^\s*THINKING:\s*/i,'');
+  const idx=t.search(/\n?\s*CAUSE:/i);
+  if(idx>=0) return esc(t.slice(0,idx).trim())+'<span style="color:var(--muted)">\n\n→ drafting the assessment…</span>';
+  return esc(t)+'<span style="color:var(--green);animation:blink 1s infinite">▍</span>';
+}
+function updateLive(){ const el=document.getElementById('liveThink'); if(el){ el.innerHTML=liveText(S.live); el.scrollTop=el.scrollHeight; } }
+
+//==================== logo ====================
+const logo = (sz)=>`<div class="logo" style="width:${sz}px;height:${sz}px;box-shadow:0 2px 10px rgba(0,0,0,.25)"><span class="stem" style="height:${sz*.33}px"></span><span class="lf1"></span><span class="lf2"></span></div>`;
+
+//==================== ONBOARDING ====================
+function onboarding(){
+  const u=S.user, step=S.ob;
+  const dots=[0,1,2].map(i=>`<span style="height:5px;border-radius:3px;flex:1;background:${i<=step?'var(--green)':'var(--line)'}"></span>`).join('');
+  const stepLabel=`STEP ${step+1} / 3`;
+  let body='';
+  if(step===0){
+    const roles=[['officer','🩺','Extension officer','Manage a caseload across many farmers'],['farmer','🌱','Farmer','Advice for my own crops & animals']];
+    body=`<h2 class="serif" style="margin:0 0 6px;font-size:27px;font-weight:700">Let's set up your workbench</h2>
+      <p style="margin:0 0 24px;font-size:14.5px;color:var(--muted)">This stays on your device and tailors AgriDoc to how you work.</p>
+      <label style="display:block;margin-bottom:22px"><span style="display:block;font-size:12px;font-weight:600;margin-bottom:8px">Your name</span>
+      <input id="obName" value="${esc(u.name)}" placeholder="e.g. Asha Mwangi" oninput="A.setName(this.value)" style="width:100%;padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:#fff;font-size:15px;outline:none"/></label>
+      <span style="display:block;font-size:12px;font-weight:600;margin-bottom:10px">What will you use AgriDoc for?</span>
+      <div style="display:flex;flex-direction:column;gap:11px">${roles.map(([id,ic,t,s])=>`
+        <button onclick="A.setRole('${id}')" style="display:flex;align-items:center;gap:13px;padding:14px;border-radius:13px;border:1px solid ${u.role===id?'var(--green)':'var(--line)'};background:${u.role===id?'var(--green-t)':'#fff'}">
+          <span style="width:42px;height:42px;border-radius:11px;background:var(--green-t);display:flex;align-items:center;justify-content:center;font-size:19px">${ic}</span>
+          <span style="flex:1;text-align:left"><span style="display:block;font-size:15px;font-weight:600">${t}</span><span style="display:block;font-size:12.5px;color:var(--muted);margin-top:2px">${s}</span></span>
+          <span style="width:20px;height:20px;border-radius:50%;border:2px solid ${u.role===id?'var(--green)':'var(--line)'};display:flex;align-items:center;justify-content:center;color:var(--green);font-size:11px">${u.role===id?'●':''}</span>
+        </button>`).join('')}</div>`;
+  } else if(step===1){
+    body=`<h2 class="serif" style="margin:0 0 6px;font-size:27px;font-weight:700">Which country do you work in?</h2>
+      <p style="margin:0 0 18px;font-size:14.5px;color:var(--muted)">Sets the default for your cases and tailors the crop calendar to your region's seasons. You can change it any time.</p>
+      <label style="display:block;margin-bottom:16px"><span style="display:block;font-size:12px;font-weight:600;margin-bottom:8px">Country</span>
+      <select onchange="A.setRegion(this.value)" style="width:100%;padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:#fff;font-size:15px;color:${u.region?'var(--ink)':'var(--muted)'};outline:none">
+        <option value="" ${u.region?'':'selected'}>Select your country…</option>
+        ${COUNTRIES.map(c=>`<option value="${c}" ${u.region===c?'selected':''}>${c}</option>`).join('')}
+      </select></label>
+      <div style="display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:var(--amber-t);font-size:11.5px;color:var(--amber-d)">ⓘ You tell us — AgriDoc never uses GPS or the internet to locate you.</div>`;
+  } else {
+    const customs=u.crops.filter(id=>!CROPS.some(c=>c[0]===id));
+    body=`<h2 class="serif" style="margin:0 0 6px;font-size:27px;font-weight:700">What do you work with?</h2>
+      <p style="margin:0 0 20px;font-size:14.5px;color:var(--muted)">Pick the crops and animals you work with most — this just tailors your home screen and quick-picks. You can diagnose anything at any time, even crops that aren't listed.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:9px">
+        ${CROPS.map(([id,l])=>`<button onclick="A.toggleCrop('${id}')" class="chip ${u.crops.includes(id)?'on':''}">${l}${u.crops.includes(id)?' <span style="color:var(--green);font-weight:700">✓</span>':''}</button>`).join('')}
+        ${customs.map(id=>`<button onclick="A.toggleCrop('${id}')" class="chip on" title="Remove">${esc(id)} <span style="color:var(--green);font-weight:700">✕</span></button>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:15px;max-width:400px">
+        <input id="addCrop" placeholder="Add another — e.g. Sorghum, Rice, Groundnut, Goats…" onkeydown="if(event.key==='Enter'){A.addCrop(this.value);this.value=''}" style="flex:1;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:14px;outline:none"/>
+        <button onclick="A.addCrop(document.getElementById('addCrop').value)" class="chip" style="font-weight:600">+ Add</button>
+      </div>
+      <div class="mono" style="font-size:11px;color:var(--muted);margin-top:13px">The library covers the listed items best — others still work, just more often as <strong>general</strong> guidance.</div>`;
+  }
+  const canNext = step===0 ? (u.name.trim()&&u.role) : step===1 ? u.region.trim() : u.crops.length;
+  return `<div style="display:flex;width:100%;height:100%">
+    <div style="width:42%;max-width:520px;flex:none;background:linear-gradient(165deg,var(--spine),var(--spine-2) 60%,#1C3E2A);color:#EFE9DB;padding:38px 40px;display:flex;flex-direction:column;position:relative;overflow-y:auto">
+      <div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--green),var(--amber),var(--terra))"></div>
+      <div style="display:flex;align-items:center;gap:13px">${logo(46)}<div style="line-height:1.05"><div class="serif" style="font-size:25px;font-weight:700;color:#FBF7EC">AgriDoc</div><div class="mono" style="font-size:10px;color:#A9B7A2;letter-spacing:.08em;margin-top:2px">FIELD ADVISORY WORKBENCH</div></div></div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
+        <h1 class="serif" style="margin:0;font-size:33px;line-height:1.18;font-weight:700;color:#FBF7EC">Trustworthy crop &amp; livestock advice — that runs entirely on this laptop.</h1>
+        <p style="margin:18px 0 0;font-size:15px;line-height:1.6;color:#C2CDBC;max-width:380px">A diagnostic workbench for extension officers. Structured diagnoses, grounded in a local knowledge base, recorded against your farmers — and it never needs the internet.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.04)"><span style="width:9px;height:9px;border-radius:50%;background:#7FC98A;animation:pulse 2.4s ease-in-out infinite"></span><span style="font-size:12.5px;color:#C2CDBC"><strong style="color:#EFE9DB">100% offline.</strong> Your farmers' data stays on this laptop — nothing is ever uploaded.</span></div>
+    </div>
+    <div class="paper-bg" style="flex:1;display:flex;flex-direction:column;padding:30px 48px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;flex:none">${dots}<span class="mono" style="font-size:11px;color:var(--muted);margin-left:6px">${stepLabel}</span></div>
+      <div style="flex:1;min-height:0;overflow-y:auto;max-width:520px;padding-right:6px">${body}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;flex:none;max-width:520px">
+        <button onclick="A.obBack()" style="background:transparent;border:none;color:${step?'var(--muted)':'transparent'};font-size:14px;font-weight:600">← Back</button>
+        <button id="obNext" onclick="A.obNext()" ${canNext?'':'disabled'} class="btn-green" style="opacity:${canNext?1:.4}">${step<2?'Continue':'Enter workbench'} →</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+//==================== APP SHELL ====================
+function shell(inner){
+  const u=S.user;
+  const pat = patterns();
+  return `<div style="display:flex;width:100%;height:100%">
+    <aside class="no-print" style="width:236px;flex:none;background:linear-gradient(180deg,var(--spine),var(--spine-2) 55%,#1C3E2A);color:#EFE9DB;display:flex;flex-direction:column;padding:17px 13px;gap:13px;position:relative">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--green),var(--amber),var(--terra))"></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:4px 4px 0">${logo(36)}<div style="line-height:1.02"><div class="serif" style="font-size:19px;font-weight:700;color:#FBF7EC">AgriDoc</div><div class="mono" style="font-size:9px;color:#A9B7A2;letter-spacing:.06em">WORKBENCH</div></div></div>
+      <button onclick="A.newDx()" class="btn-amber" style="display:flex;align-items:center;justify-content:center;gap:9px;width:100%"><span style="font-size:17px;margin-top:-1px">+</span> New diagnosis</button>
+      <nav style="display:flex;flex-direction:column;gap:3px">
+        <button onclick="A.go('home')" class="nav ${S.screen==='home'?'on':''}"><span style="width:15px;height:15px;border:2px solid currentColor;border-radius:50%;opacity:.9"></span>Today</button>
+        <button onclick="A.go('cases')" class="nav ${S.screen==='cases'?'on':''}"><span style="width:15px;height:15px;display:flex;flex-direction:column;gap:2.5px;justify-content:center"><i style="height:2px;background:currentColor;border-radius:2px"></i><i style="height:2px;width:70%;background:currentColor;border-radius:2px"></i><i style="height:2px;background:currentColor;border-radius:2px"></i></span>Cases<span class="mono" style="margin-left:auto;font-size:11px;background:rgba(255,255,255,.12);padding:1px 7px;border-radius:99px">${S.cases.length}</span></button>
+      </nav>
+      <div style="flex:1"></div>
+      ${pat[0]?`<div style="border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:12px;background:rgba(255,255,255,.04)"><div class="mono" style="font-size:9.5px;font-weight:600;letter-spacing:.08em;color:#7E8C78;margin-bottom:8px">FROM YOUR CASE RECORDS</div><div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#C2CDBC;line-height:1.35"><span style="color:#E0A24E;font-size:14px">↗</span>${esc(pat[0].body)}</div></div>`:''}
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 10px;border:1px solid rgba(255,255,255,.10);border-radius:12px">
+        <span style="width:32px;height:32px;flex:none;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${initials(u.name)}</span>
+        <div style="line-height:1.2;min-width:0;flex:1"><div style="font-size:12.5px;font-weight:600;color:#FBF7EC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(u.name)||'You'}</div><div style="font-size:10px;color:#A9B7A2">${u.role==='officer'?'Extension officer':'Farmer'} · ${esc(u.region)||'—'}</div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px;color:#A9B7A2"><div class="mono" style="display:flex;align-items:center;gap:7px;font-size:10.5px"><span style="width:6px;height:6px;border-radius:50%;background:#7FC98A"></span>100% offline · on-device</div><div style="font-size:9.5px;opacity:.85">knowledge as of ${ASOF} · no live updates</div></div>
+    </aside>
+    <main class="paper-bg" style="flex:1;display:flex;flex-direction:column;min-width:0">${inner}</main>
+  </div>`;
+}
+
+//==================== HOME ====================
+function patterns(){
+  const since = Date.now()-21*864e5, m={};
+  S.cases.forEach(c=>{ if(c.ts>=since && c.diagnosis){ m[c.diagnosis]=(m[c.diagnosis]||0)+1 } });
+  return Object.entries(m).filter(([,n])=>n>=2).sort((a,b)=>b[1]-a[1])
+    .map(([d,n])=>({title:`${n} ${d} cases`, body:`${n} ${d} cases in 3 weeks`}));
+}
+function home(){
+  const u=S.user, pat=patterns();
+  const cal = cropCalendar(u.region);
+  const r=S.kbResult;
+  const answer = S.kbState==='loading'
+    ? `<div class="card" style="padding:15px 18px;margin-top:12px;color:var(--muted);font-size:13.5px;display:flex;align-items:center;gap:9px"><span style="display:flex;gap:4px"><i style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1.2s infinite both"></i><i style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1.2s .2s infinite both"></i><i style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1.2s .4s infinite both"></i></span>Thinking on this device…</div>`
+    : S.kbError ? `<div class="card" style="padding:14px 16px;margin-top:12px;border-color:var(--terra);color:var(--terra);font-size:13px">${esc(S.kbError)}</div>`
+    : r ? `<div class="card" style="padding:18px 20px;margin-top:12px">
+        <p style="margin:0 0 12px;font-size:15px;line-height:1.65;white-space:pre-wrap">${esc(r.answer)}</p>
+        ${r.sources&&r.sources.length?`<div style="border-top:1px solid var(--line-2);padding-top:11px"><div class="mono" style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:8px">WHERE THIS COMES FROM · BUNDLED ${ASOF.toUpperCase()}</div>${r.sources.slice(0,3).map(s=>`<div style="display:flex;gap:8px;margin-bottom:6px"><span class="pill" style="flex:none;color:#fff;background:#8a857a">${esc(s.origin)}</span><div style="font-size:12px;color:var(--muted);min-width:0">${esc(s.title)} — "${esc(s.snippet)}"</div></div>`).join('')}<div style="font-size:11px;color:var(--muted);margin-top:4px">May be out of date — confirm time-sensitive things (rates, prices, new varieties) locally.</div></div>`:''}
+        <div style="display:flex;gap:9px;margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><button onclick="A.escalateDx()" class="btn-green" style="padding:9px 15px;font-size:13px">Work this up as a full diagnosis →</button></div>
+      </div>` : '';
+  return `<section style="flex:1;overflow-y:auto"><div style="max-width:1080px;margin:0 auto;padding:36px 40px 56px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:4px">
+      <h1 class="serif" style="margin:0;font-size:31px;font-weight:700">${T.greeting()}, ${esc(u.name.split(' ')[0]||'there')}.</h1>
+      <div class="mono" style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted)"><span>${new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</span><span style="width:4px;height:4px;border-radius:50%;background:var(--amber)"></span><span>${esc(u.region)||'—'}</span></div>
+    </div>
+    <p style="margin:0 0 22px;font-size:15px;color:var(--muted)">Ask anything you're seeing on the farm — or work up a problem in full.</p>
+    <div class="card" style="padding:18px 20px;box-shadow:0 8px 26px rgba(80,64,30,.07)">
+      <div style="display:flex;gap:9px"><input id="homeq" value="${esc(S.kbq||'')}" placeholder="Ask a quick question — e.g. is it normal for my chicks to huddle under the lamp?" onkeydown="if(event.key==='Enter')A.kbSearch(this.value)" style="flex:1;padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:#fff;font-size:14.5px;outline:none"/><button onclick="A.kbSearch(document.getElementById('homeq').value)" class="btn-green" style="flex:none">${S.kbState==='loading'?'…':'Ask'}</button></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:9px;line-height:1.45">Offline · I answer from what I know and my reference notes (as of ${ASOF}). Got a real problem to work through? <button onclick="A.newDx()" style="background:transparent;border:none;color:var(--green-d);font-weight:600;font-size:11.5px;cursor:pointer;padding:0">Diagnose a problem →</button></div>
+    </div>
+    ${answer}
+    <div style="height:30px"></div>
+    <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:28px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:26px">
+        <div><div style="display:flex;align-items:center;gap:9px;margin-bottom:13px"><span style="width:7px;height:7px;border-radius:2px;background:var(--amber)"></span><span class="serif" style="font-size:17px;font-weight:600">Seasonal guide</span><span class="mono" style="font-size:10px;color:var(--muted);background:var(--line-2);padding:2px 8px;border-radius:99px">HISTORICAL SEASONS · NOT LIVE WEATHER</span></div>
+          <div class="card" style="padding:17px 19px"><div style="font-size:14.5px;font-weight:600;margin-bottom:6px">${esc(cal.country)} — ${esc(cal.phase||'year-round growing')}</div><p style="margin:0;font-size:13.5px;line-height:1.55;color:#403a2c">Historically around ${cal.month}, ${cal.body}</p><div style="font-size:11.5px;color:var(--muted);margin-top:11px;line-height:1.45">Based on ${esc(cal.country)}'s historical seasons — <strong>not live weather</strong>. Rains can come early or late, so always trust what you actually see in your fields.</div></div></div>
+        <div><div style="display:flex;align-items:center;gap:9px;margin-bottom:13px"><span style="width:7px;height:7px;border-radius:2px;background:var(--terra)"></span><span class="serif" style="font-size:17px;font-weight:600">Patterns in your caseload</span></div>
+          ${pat.length?`<div style="display:flex;flex-direction:column;gap:10px">${pat.map(p=>`<div class="card" style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px"><span style="width:30px;height:30px;flex:none;border-radius:8px;background:var(--terra-t);color:var(--terra);display:flex;align-items:center;justify-content:center;font-size:14px">↗</span><div style="flex:1"><div style="font-size:14px;font-weight:600">${esc(p.title)}</div><div style="font-size:12.5px;color:var(--muted);margin-top:2px">Trending in the last 3 weeks — worth watching.</div></div></div>`).join('')}<div class="mono" style="font-size:11px;color:var(--muted);padding-left:2px">your records only · the model is not involved in these counts</div></div>`:`<div class="card" style="padding:16px 18px;font-size:13px;color:var(--muted)">No patterns yet — they appear once you've logged a few cases. Computed only from your own records.</div>`}
+        </div>
+      </div>
+      <div><div style="display:flex;align-items:center;gap:9px;margin-bottom:13px"><span style="width:7px;height:7px;border-radius:2px;background:var(--green)"></span><span class="serif" style="font-size:17px;font-weight:600">Recent cases</span></div>
+        <div class="card" style="overflow:hidden">${S.cases.length?S.cases.slice(0,6).map((c,i)=>`<button onclick="A.openCase(${i})" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent;border:none;border-bottom:1px solid var(--line-2);padding:13px 15px"><span class="mono" style="width:34px;height:34px;flex:none;border-radius:9px;background:var(--green-t);color:var(--green-d);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${esc((c.crop||'?')[0].toUpperCase())}</span><span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px;font-weight:600">${esc(c.diagnosis||'Unsaved')}</span><span style="display:block;font-size:12px;color:var(--muted)">${esc(c.farmer||c.crop||'')} · ${new Date(c.ts).toLocaleDateString()}</span></span></button>`).join(''):`<div style="padding:22px;text-align:center;font-size:13px;color:var(--muted)">No cases yet.</div>`}</div>
+      </div>
+    </div>
+  </div></section>`;
+}
+// Coarse rainfall-regime per country (deterministic almanac, NOT live weather).
+const REGIME={Kenya:'ea',Uganda:'ea',Tanzania:'ea',Rwanda:'ea',Burundi:'ea',Somalia:'ea',Ethiopia:'ea',Eritrea:'ea',Djibouti:'ea',
+  Liberia:'wm','Sierra Leone':'wm',Guinea:'wm','Guinea-Bissau':'wm',Ghana:'wm','Côte d\'Ivoire':'wm',Togo:'wm',Benin:'wm',Nigeria:'wm',Cameroon:'wm',
+  Mali:'sahel',Niger:'sahel','Burkina Faso':'sahel',Chad:'sahel',Senegal:'sahel',Gambia:'sahel',Mauritania:'sahel',Sudan:'sahel','South Sudan':'sahel','Cabo Verde':'sahel',
+  'Congo (DRC)':'eq','Congo (Brazzaville)':'eq',Gabon:'eq','Equatorial Guinea':'eq','Central African Republic':'eq','São Tomé and Príncipe':'eq',Seychelles:'eq',
+  Zambia:'sa',Zimbabwe:'sa',Malawi:'sa',Mozambique:'sa','South Africa':'sa',Botswana:'sa',Namibia:'sa',Angola:'sa',Madagascar:'sa',Lesotho:'sa',Eswatini:'sa',Mauritius:'sa',Comoros:'sa',
+  Morocco:'med',Algeria:'med',Tunisia:'med',Egypt:'med',Libya:'med'};
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function seasonInfo(reg,m){
+  const R={
+    ea:()=>(m>=2&&m<=4)?['long-rains season','crops are usually planting and in early growth — a time to scout young maize for fall armyworm and stem borer.']
+      :(m>=9&&m<=11)?['short-rains season','short-rains crops are usually planting and growing, with leaf diseases rising as humidity climbs.']
+      :(m>=5&&m<=8)?['cool dry season','the long rains are usually over and the main crop is maturing and drying down — a time to plan harvest and watch for storage pests.']
+      :['warm dry spell','a usually drier gap between the rains — good for land preparation and irrigated dry-season crops.'],
+    wm:()=>(m>=3&&m<=5)?['start of the rains','the rains usually begin and planting starts around now — onset shifts year to year, so go by the actual rain. Scout young crops for armyworm.']
+      :(m>=6&&m<=8)?['peak rainy season','rains are usually heaviest now, so leaf diseases and blights build in the humidity — scout often and keep drainage clear.']
+      :(m>=9&&m<=10)?['late rains & early harvest','rains usually ease and early crops mature — manage late-season disease and dry the harvest well.']
+      :['dry season','usually little rain — harvest, drying and storage are the focus, and stored grain needs watching for weevils and mould.'],
+    sahel:()=>(m>=5&&m<=9)?['the rainy season','the single rainy season is usually underway — the critical window for rain-fed cereals. Scout for armyworm and manage Striga and weeds.']
+      :['long dry season','usually dry — harvest, careful drying and storage matter most (watch for aflatoxin in poorly dried grain); irrigated vegetables near water.'],
+    sa:()=>(m>=10||m<=2)?['summer rainy season','southern-hemisphere rains usually bring the main planting and growth — scout young maize for fall armyworm in the warm, wet weather.']
+      :(m>=3&&m<=5)?['harvest season','summer crops are usually maturing as the rains end — harvest, drying and storage are the priority.']
+      :['cool dry season','usually cool and dry — main fields rest or are prepared; winter or irrigated crops where water allows.'],
+    eq:()=>[null,'rainfall is usually spread across much of the year here with two wetter peaks, so crops grow in most months — scout continuously rather than by one season.'],
+    med:()=>(m>=10||m<=3)?['cool rainy season','the winter rains are usually the main growing season for cereals and vegetables — watch for rusts in the cool, damp weather.']
+      :['hot dry summer','usually hot and dry — irrigated crops only; rain-fed cereals were harvested in late spring.'],
+  };
+  return (R[reg]||R.wm)();
+}
+function cropCalendar(country){
+  const m=new Date().getMonth(), reg=REGIME[country]||'wm';
+  const [phase,body]=seasonInfo(reg,m);
+  return {phase, body, month:MONTHS[m], country};
+}
+
+//==================== DIAGNOSE ====================
+function diagnose(){
+  const k=S.intake;
+  const myCrops = S.user.crops.length ? S.user.crops.map(id=>[id,cropLabel(id)]) : CROPS;
+  const chips=(list,val,fn)=>list.map(x=>{const [id,lab]=Array.isArray(x)?x:[x,x];return `<button onclick="A.${fn}('${id}')" class="chip ${val===id?'on':''}">${lab}</button>`}).join('');
+  const canRun = k.symptom.trim().length>=8;  // the description gates it — chips alone are too thin
+  const intake=`<div class="no-print" style="width:312px;flex:none;border-right:1px solid var(--line);background:rgba(252,249,242,.5);display:flex;flex-direction:column;min-height:0">
+    <div style="flex:none;padding:18px 20px 14px;border-bottom:1px solid var(--line-2)"><div class="serif" style="font-size:16px;font-weight:600">Field intake</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Structured details sharpen the search.</div></div>
+    <div style="flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:16px">
+      <div>
+        <div class="mono" style="font-size:11px;font-weight:600;color:var(--green-d);margin-bottom:8px">DESCRIBE THE PROBLEM</div>
+        <textarea oninput="A.setSymptom(this.value)" placeholder="Tell it like you'd tell a vet: what you see, when (day/night), how many, how fast, the age or stage, and anything that changed recently.&#10;&#10;e.g. “At night my broilers are dying two at a time, I don't know why.”" rows="7" style="width:100%;border:1.5px solid var(--green);border-radius:11px;background:#fff;font-size:14px;line-height:1.55;padding:12px 14px;outline:none;resize:none">${esc(k.symptom)}</textarea>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.45">The pattern — timing, how many, the age — is the biggest clue. The more you say, the sharper the answer.</div>
+      </div>
+      <details ${(k.crop||k.stage||k.part)?'open':''} style="border-top:1px solid var(--line-2);padding-top:14px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--muted);list-style:none;user-select:none">＋ Add quick details <span style="color:var(--line)">(optional)</span></summary>
+        <div style="display:flex;flex-direction:column;gap:15px;margin-top:13px">
+          <div><div class="mono" style="font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:8px">CROP / ANIMAL</div>
+            <div style="display:flex;flex-wrap:wrap;gap:7px">${chips(myCrops,k.crop,'setIntakeCrop')}</div>
+            <input placeholder="or type another…" onchange="A.setIntakeCropText(this.value)" value="${(k.crop&&!myCrops.some(c=>c[0]===k.crop))?esc(cropLabel(k.crop)):''}" style="margin-top:8px;width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:13px;outline:none"/></div>
+          <div><div class="mono" style="font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:8px">GROWTH STAGE / AGE</div><div style="display:flex;flex-wrap:wrap;gap:7px">${chips(STAGES,k.stage,'setIntakeStage')}</div></div>
+          <div><div class="mono" style="font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:8px">AFFECTED PART</div><div style="display:flex;flex-wrap:wrap;gap:7px">${chips(PARTS,k.part,'setIntakePart')}</div></div>
+        </div>
+      </details>
+    </div>
+    <div style="flex:none;padding:14px 20px;border-top:1px solid var(--line-2)"><button id="runBtn" onclick="A.runDx()" ${canRun?'':'disabled'} class="btn-green" style="width:100%;opacity:${canRun?1:.4}">${S.dxState==='loading'?'Working…':'Run diagnosis'}</button><div id="runHint" style="display:${canRun?'none':'block'};font-size:11px;color:var(--muted);text-align:center;margin-top:7px">Describe what you see above — the details alone aren't enough to diagnose.</div></div>
+  </div>`;
+  let work='';
+  if(S.error) work=`<div class="card" style="max-width:520px;padding:18px 20px;border-color:var(--terra);color:var(--terra)"><strong>Couldn't run the diagnosis.</strong><div style="font-size:13px;margin-top:6px;color:#7a4a3a">${esc(S.error)}</div><div style="font-size:12px;margin-top:8px;color:var(--muted)">Make sure the local model server and <span class="mono">rag serve</span> are running.</div></div>`;
+  else if(S.dxState==='empty') work=`<div style="max-width:560px">
+    <div class="serif" style="font-size:21px;font-weight:700;margin-bottom:4px">Describe what you're seeing →</div>
+    <p style="font-size:14px;color:var(--muted);line-height:1.55;margin:0 0 22px">Use the intake on the left. AgriDoc reasons through the likely causes, asks one question to narrow it down, and shows where its answer comes from. The more you describe, the sharper it gets.</p>
+    <div class="mono" style="font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:10px">A GOOD DESCRIPTION INCLUDES</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">${['what you see','when — day or night','how many, how fast','age / growth stage','what changed recently'].map(t=>`<span class="pill" style="background:var(--green-t);color:var(--green-d)">${t}</span>`).join('')}</div>
+    <div class="mono" style="font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:10px">EXAMPLES — TAP TO TRY</div>
+    <div style="display:flex;flex-direction:column;gap:9px">${[
+      'At night my broilers are dying two at a time, but they seem fine in the day.',
+      'My maize leaves have long pale streaks along them and the plants are stunted.',
+      'My beans have orange rusty pustules under the leaves that rub off on my finger.'
+    ].map(ex=>`<button onclick="A.tryExample('${esc(ex).replace(/'/g,"\\'")}')" class="card" style="text-align:left;padding:12px 14px;cursor:pointer;font-size:13.5px;line-height:1.45;color:#33312a">"${esc(ex)}"</button>`).join('')}</div>
+  </div>`;
+  else if(S.dxState==='loading') work=`<div class="card" style="padding:20px 22px;max-width:680px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span style="display:flex;gap:5px"><i style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1.2s infinite both"></i><i style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1.2s .2s infinite both"></i><i style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1.2s .4s infinite both"></i></span>
+      <span style="font-size:14.5px;font-weight:600">AgriDoc is reasoning — on this laptop</span>
+      <span class="mono" style="margin-left:auto;font-size:10px;letter-spacing:.04em;color:var(--green-d);background:var(--green-t);border-radius:5px;padding:2px 7px">● LIVE</span>
+    </div>
+    <div id="liveThink" style="white-space:pre-wrap;font-size:13.5px;line-height:1.6;color:#33312a;margin:0;font-family:'Spectral',Georgia,serif;min-height:48px;max-height:360px;overflow-y:auto">${S.live?liveText(S.live):'<span style="color:var(--muted)">Reading the pattern in what you described…</span>'}</div>
+  </div>`;
+  else if(S.dxState==='result'&&S.dx) work=dxResult(S.dx);
+  return `<section style="flex:1;display:flex;min-height:0">${intake}<div id="work" style="flex:1;min-width:0;overflow-y:auto"><div style="max-width:720px;margin:0 auto;padding:26px 36px 40px">${work}</div></div></section>`;
+}
+function dxResult(d){
+  const cards=(d.causes||[]).map((c,i)=>dxCard(c,i)).join('');
+  const ask=d.ask?`<div class="card" style="background:linear-gradient(180deg,#F6F1E4,var(--card));padding:16px 19px;margin-bottom:18px"><div style="display:flex;align-items:center;gap:9px;margin-bottom:7px"><span style="width:22px;height:22px;border-radius:7px;background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">?</span><span class="serif" style="font-size:16px;font-weight:600">Answer this to narrow it down</span></div><p style="margin:0;font-size:14.5px;line-height:1.55;color:#33312a">${esc(d.ask)}</p><p style="margin:9px 0 0;font-size:12px;color:var(--muted)">Add what you find to your description on the left and run it again for a sharper result.</p></div>`:'';
+  return `<div><div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><h2 class="serif" style="margin:0;font-size:21px;font-weight:700">Assessment</h2><span class="mono" style="font-size:11.5px;color:var(--muted)">${d.causes.length} possibilit${d.causes.length>1?'ies':'y'} · most likely first</span></div>
+    <p style="margin:0 0 18px;font-size:13px;line-height:1.55;color:var(--muted)">I reasoned this through from what you described. Where a reference note shaped my answer I show the source on the card. I'm a small offline assistant — always check against what you see in the field before acting.</p>
+    ${cards}${ask}${dxWorking(d)}
+    <div class="no-print" style="display:flex;flex-wrap:wrap;gap:9px;padding-top:18px;border-top:1px solid var(--line)"><button onclick="A.saveCase()" class="btn-green" style="padding:11px 17px;font-size:13.5px">✓ Save to case record</button><button onclick="window.print()" class="btn-ghost">⤓ Print farmer advisory</button></div><div class="print-doc">${advisory(d,{crop:cropLabel(S.intake.crop),date:Date.now(),who:S.user.name,symptom:S.intake.symptom})}</div></div>`;
+}
+function dxWorking(d){
+  const open=S.srcOpen['work'];
+  const src=(d.related||[]).map((s)=>`<div style="display:flex;gap:9px;margin-bottom:8px"><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:7px"><span class="pill" style="color:#fff;background:#8a857a">${esc(s.origin)}</span><span style="font-size:12.5px;font-weight:600">${esc(s.title)}</span></div><div style="font-size:12px;color:var(--muted);line-height:1.45;border-left:2px solid var(--line);padding-left:10px;margin-top:5px">"${esc(s.snippet)}"</div></div></div>`).join('');
+  return `<div class="no-print" style="margin:6px 0 20px">
+    <button onclick="A.toggleSrc('work')" class="mono" style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer">⚙ ${open?'Hide':'See'} how I reasoned</button>
+    ${open?`<div class="card" style="margin-top:10px;padding:16px 18px;background:rgba(246,241,228,.5)">
+      <div class="mono" style="font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:7px">MY REASONING</div>
+      <div class="serif" style="font-size:13.5px;line-height:1.6;color:#33312a;margin-bottom:16px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:11px 13px">${esc(d.thinking)||'<span style="color:var(--muted)">I did not separate out my reasoning this time.</span>'}</div>
+      <div class="mono" style="font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:9px">REFERENCE NOTES I CHECKED <span style="font-weight:400;text-transform:none;letter-spacing:0">— from my offline notes, bundled ${ASOF}</span></div>
+      ${src||'<div style="font-size:12.5px;color:var(--muted)">Nothing closely matched — I answered from my own knowledge.</div>'}
+      <div style="font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5">Everything ran on this laptop, fully offline. My knowledge — both what I learned and these reference notes — is from around ${ASOF}, so I can't see anything newer. Treat time-sensitive details (rates, prices, new varieties) as needing a local check.</div>
+    </div>`:''}
+  </div>`;
+}
+function dxCard(c,i){
+  const lib = c.grounding==='library';
+  const big = c.rank==='most_likely';
+  const rankLabel = {most_likely:'MOST LIKELY',also_consider:'ALSO CONSIDER'}[c.rank]||'';
+  const rankBg = big?'var(--green)':'var(--amber-t)';
+  const rankFg = big?'#fff':'var(--amber-d)';
+  const actions = c.actions&&c.actions.length?`<div style="padding:2px 20px 16px"><div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--green-d);margin:12px 0 8px">DO / CHECK</div><div style="display:flex;flex-direction:column;gap:3px">${c.actions.map((a,j)=>`<button onclick="A.tick('a${i}_${j}')" style="display:flex;gap:11px;align-items:flex-start;text-align:left;background:transparent;border:none;border-radius:9px;padding:7px 10px;width:100%"><span class="check ${S.ticks['a'+i+'_'+j]?'on':''}">${S.ticks['a'+i+'_'+j]?'✓':''}</span><span style="font-size:14px;line-height:1.5;color:#33312a">${esc(a)}</span></button>`).join('')}</div></div>`:'';
+  // sources shown as a dated CITATION (where it came from), not a "library" verdict badge
+  const srcBox = (c.sources&&c.sources.length)?`<div style="margin:2px 20px 14px"><div class="mono" style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px">WHERE THIS COMES FROM</div>${c.sources.map(s=>`<div style="background:rgba(246,241,228,.6);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:6px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span class="pill" style="color:#fff;background:#8a857a">${esc(s.origin)}</span><span style="font-size:12px;font-weight:600">${esc(s.title)}</span></div><div style="font-size:12px;line-height:1.45;color:#46503e;border-left:2px solid var(--line);padding-left:10px">"${esc(s.snippet)}"</div></div>`).join('')}<div style="font-size:11px;color:var(--muted);line-height:1.45">From my offline reference notes (bundled ${ASOF}) — may be out of date; confirm time-sensitive things (rates, prices, new varieties) with your local extension officer.</div></div>`:'';
+  return `<div class="card" style="overflow:hidden;margin-bottom:11px;${big?'border-color:#CFE0C2;box-shadow:0 4px 16px rgba(47,107,67,.08)':''}">
+    <div style="padding:16px 20px 4px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap"><span class="pill" style="color:${rankFg};background:${rankBg}">${rankLabel}</span></div>
+      <h3 class="serif" style="margin:0 0 7px;font-size:${big?'21px':'18px'};font-weight:700;line-height:1.2">${esc(c.name)}</h3>
+      ${c.explanation?`<p style="margin:0 0 6px;font-size:${big?'15px':'14px'};line-height:1.6;color:#33312a">${esc(c.explanation)}</p>`:''}</div>
+    ${srcBox}${actions}</div>`;
+}
+
+//==================== CASES ====================
+function cases(){
+  return `<section style="flex:1;overflow-y:auto"><div style="max-width:900px;margin:0 auto;padding:36px 40px">
+    <h1 class="serif" style="margin:0 0 4px;font-size:28px;font-weight:700">Case records</h1>
+    <p style="margin:0 0 24px;font-size:14px;color:var(--muted)">${S.cases.length} case${S.cases.length!==1?'s':''} saved on this laptop. Tap one to reopen it or print a farmer advisory.</p>
+    ${S.cases.length?`<div style="display:flex;flex-direction:column;gap:10px">${S.cases.map((c,i)=>`<button onclick="A.openCase(${i})" class="card" style="display:flex;align-items:center;gap:14px;padding:15px 18px;width:100%;text-align:left;cursor:pointer"><span class="mono" style="width:38px;height:38px;flex:none;border-radius:10px;background:var(--green-t);color:var(--green-d);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">${esc((c.crop||'?')[0].toUpperCase())}</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600">${esc(c.diagnosis||'Unsaved diagnosis')}</div><div style="font-size:12.5px;color:var(--muted)">${esc(c.crop||'—')} · ${new Date(c.ts).toLocaleString()}</div></div><span style="color:var(--muted);font-size:18px">›</span></button>`).join('')}</div>`:`<div class="card" style="padding:40px;text-align:center;color:var(--muted)">No cases yet. Run a diagnosis and save it to start your records.</div>`}
+  </div></section>`;
+}
+
+// clean, farmer-facing printable advisory (the take-home artifact)
+function advisory(dx, meta){
+  const top=(dx.causes&&dx.causes[0])||{};
+  const doList=(top.actions||[]).map(a=>`<li style="margin-bottom:4px">${esc(a)}</li>`).join('');
+  const alts=(dx.causes||[]).slice(1).map(c=>esc(c.name)).filter(Boolean).join('; ');
+  const s=top.sources&&top.sources[0];
+  const cite=s?`Source: ${esc(s.origin)} — ${esc(s.title)} (bundled ${ASOF})`:'';
+  return `<div style="max-width:680px;margin:0 auto;font-family:'Spectral',Georgia,serif;color:#1a1a1a">
+    <div style="border-bottom:2px solid #2F6B43;padding-bottom:8px;margin-bottom:14px">
+      <div style="font-size:22px;font-weight:700">AgriDoc — Farmer Advisory</div>
+      <div style="font-size:12px;color:#555">${esc(meta.crop||'')}${meta.crop?' · ':''}${new Date(meta.date).toLocaleDateString()} · prepared by ${esc(meta.who||'AgriDoc')}</div>
+    </div>
+    ${meta.symptom?`<p style="font-size:13px;margin:0 0 10px"><strong>What was reported:</strong> ${esc(meta.symptom)}</p>`:''}
+    <h2 style="font-size:17px;margin:12px 0 4px">Most likely: ${esc(top.name||'—')}</h2>
+    ${top.explanation?`<p style="font-size:13px;margin:0 0 8px;line-height:1.5">${esc(top.explanation)}</p>`:''}
+    ${doList?`<p style="font-size:13px;font-weight:700;margin:8px 0 2px">What to do / check:</p><ul style="font-size:13px;margin:0 0 8px;padding-left:20px;line-height:1.5">${doList}</ul>`:''}
+    ${dx.ask?`<p style="font-size:13px;margin:0 0 8px"><strong>To be sure, check:</strong> ${esc(dx.ask)}</p>`:''}
+    ${alts?`<p style="font-size:12px;color:#555;margin:0 0 8px"><strong>Also consider:</strong> ${alts}</p>`:''}
+    ${cite?`<p style="font-size:11px;color:#666;margin:6px 0 0">${cite}</p>`:''}
+    <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:10.5px;color:#666;line-height:1.5">
+      Prepared offline by AgriDoc, an AI assistant (knowledge as of ${ASOF}). First-line guidance only — not a substitute for a qualified agronomist or veterinarian. Confirm anything time-sensitive (pesticide/medicine rates, prices, new varieties) with your local extension officer and follow product labels. Never use a chemical dose this advisory did not give.
+    </div></div>`;
+}
+function caseDetail(){
+  const c=S.cases[S.caseView]; if(!c) return cases();
+  const dx=c.dx||{causes:[{name:c.diagnosis||'—',rank:'most_likely',grounding:c.grounding||'reasoning'}],ask:''};
+  const cards=(dx.causes||[]).map((x,i)=>dxCard(x,i)).join('');
+  const meta={crop:c.crop,date:c.ts,who:S.user.name,symptom:c.symptom};
+  return `<section style="flex:1;overflow-y:auto"><div style="max-width:720px;margin:0 auto;padding:24px 36px 40px">
+    <button onclick="A.go('cases')" class="no-print" style="background:transparent;border:none;color:var(--muted);font-size:13px;font-weight:600;margin-bottom:10px;cursor:pointer">← Case records</button>
+    <h1 class="serif" style="margin:0 0 2px;font-size:24px;font-weight:700">${esc(c.diagnosis||'Saved case')}</h1>
+    <p style="margin:0 0 18px;font-size:12.5px;color:var(--muted)">${esc(c.crop||'')} · ${new Date(c.ts).toLocaleString()}</p>
+    ${c.symptom?`<div class="card" style="padding:13px 16px;margin-bottom:16px;background:rgba(246,241,228,.5)"><div class="mono" style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px">WHAT WAS REPORTED</div><div style="font-size:13.5px;line-height:1.5;color:#33312a">${esc(c.symptom)}</div></div>`:''}
+    ${cards}
+    ${dx.ask?`<div class="card" style="padding:14px 18px;margin-bottom:16px;background:linear-gradient(180deg,#F6F1E4,var(--card))"><span class="serif" style="font-size:15px;font-weight:600">To narrow it down: </span><span style="font-size:14px">${esc(dx.ask)}</span></div>`:''}
+    <div class="no-print" style="display:flex;gap:9px;padding-top:14px;border-top:1px solid var(--line)"><button onclick="window.print()" class="btn-green" style="padding:10px 16px;font-size:13.5px">⤓ Print farmer advisory</button></div>
+    <div class="print-doc">${advisory(dx,meta)}</div>
+  </div></section>`;
+}
+
+//==================== KB / LIBRARY ====================
+function kb(){
+  const r=S.kbResult;
+  return `<section style="flex:1;overflow-y:auto"><div style="max-width:760px;margin:0 auto;padding:36px 40px">
+    <h1 class="serif" style="margin:0 0 4px;font-size:28px;font-weight:700">Reference notes</h1>
+    <p style="margin:0 0 22px;font-size:14px;color:var(--muted)">Ask my bundled offline reference notes (FAO, Wikipedia, and AgriDoc advisories, as of ${ASOF}). Answers come only from those notes, and I show you where each one comes from — they may be out of date, so confirm time-sensitive things locally.</p>
+    <div style="display:flex;gap:9px;margin-bottom:24px"><input id="kbq" value="${esc(S.kbq||'')}" placeholder="e.g. How do I store maize so it doesn't go mouldy?" onkeydown="if(event.key==='Enter')A.kbSearch(this.value)" style="flex:1;padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:#fff;font-size:14.5px;outline:none"/><button onclick="A.kbSearch(document.getElementById('kbq').value)" class="btn-green">${S.kbState==='loading'?'…':'Ask'}</button></div>
+    ${S.kbState==='loading'?`<div class="card" style="padding:20px;color:var(--muted)">Searching my reference notes…</div>`:''}
+    ${S.kbError?`<div class="card" style="padding:18px;border-color:var(--terra);color:var(--terra)">${esc(S.kbError)}</div>`:''}
+    ${r?`<div class="card" style="padding:20px 22px"><p style="margin:0 0 14px;font-size:15px;line-height:1.65;white-space:pre-wrap">${esc(r.answer)}</p>${r.sources&&r.sources.length?`<div style="border-top:1px solid var(--line-2);padding-top:14px"><div class="mono" style="font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:10px">WHERE THIS COMES FROM · BUNDLED ${ASOF.toUpperCase()}</div>${r.sources.map(s=>`<div style="display:flex;gap:9px;margin-bottom:9px"><span class="pill" style="flex:none;color:#fff;background:${/AgriDoc/.test(s.origin)?'var(--green)':'#8a857a'}">${esc(s.origin)}</span><div><div style="font-size:13px;font-weight:600">${esc(s.title)}</div><div style="font-size:12px;color:var(--muted);line-height:1.45">"${esc(s.snippet)}"</div></div></div>`).join('')}</div>`:''}</div>`:''}
+  </div></section>`;
+}
+
+//==================== render ====================
+function render(){
+  let html;
+  if(S.screen==='onboarding') html=onboarding();
+  else if(S.screen==='home') html=shell(home());
+  else if(S.screen==='diagnose') html=shell(diagnose());
+  else if(S.screen==='cases') html=shell(cases());
+  else if(S.screen==='case') html=shell(caseDetail());
+  else if(S.screen==='kb') html=shell(kb());
+  else html=shell(home());
+  document.getElementById('root').innerHTML=html;
+}
+
+//==================== handlers ====================
+const A = {
+  go, newDx(){ S.intake={crop:'',stage:'',part:'',symptom:''}; S.dx=null; S.dxState='empty'; S.ticks={}; S.srcOpen={}; S.error=''; go('diagnose'); },
+  setName(v){ S.user.name=v; A.refreshNext(); }, setRole(r){ S.user.role=r; render(); },
+  setRegion(v){ S.user.region=v; render(); }, toggleCrop(c){ const i=S.user.crops.indexOf(c); i<0?S.user.crops.push(c):S.user.crops.splice(i,1); render(); },
+  addCrop(v){ v=(v||'').trim(); if(v&&!S.user.crops.includes(v)) S.user.crops.push(v); render(); },
+  refreshNext(){ const u=S.user,s=S.ob; const can=s===0?(u.name.trim()&&u.role):s===1?u.region.trim():u.crops.length; const b=document.getElementById('obNext'); if(b){b.disabled=!can;b.style.opacity=can?1:.4;} },
+  setLang(l){ S.user.lang=l; render(); }, toggleLang(){ S.user.lang=S.user.lang==='sw'?'en':'sw'; persist(); render(); },
+  obBack(){ if(S.ob>0){S.ob--; render();} },
+  obNext(){ if(S.ob<2){S.ob++; render();} else { persist(); go('home'); } },
+  setIntakeCrop(c){ S.intake.crop=c; render(); }, setIntakeStage(s){ S.intake.stage=s; render(); },
+  setIntakePart(p){ S.intake.part=p; render(); }, setSymptom(v){ S.intake.symptom=v; A.refreshRun(); },
+  refreshRun(){ const can=S.intake.symptom.trim().length>=8; const b=document.getElementById('runBtn'); if(b){b.disabled=!can; b.style.opacity=can?1:.4;} const h=document.getElementById('runHint'); if(h) h.style.display=can?'none':'block'; },
+  tryExample(ex){ S.intake.symptom=ex; S.error=''; render(); },
+  setIntakeCropText(v){ S.intake.crop=(v||'').trim(); render(); },
+  async runDx(){
+    S.dxState='loading'; S.error=''; S.ticks={}; S.srcOpen={}; S.dx=null; S.live=''; render();
+    try{
+      const r = await fetch(API+'/diagnose',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({crop:cropLabel(S.intake.crop), growth_stage:S.intake.stage, affected_part:S.intake.part, symptom:S.intake.symptom})});
+      if(!r.ok){ const e=await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error||('HTTP '+r.status)); }
+      const reader=r.body.getReader(), dec=new TextDecoder(); let buf='';
+      for(;;){
+        const {done,value}=await reader.read(); if(done) break;
+        buf+=dec.decode(value,{stream:true});
+        let i;
+        while((i=buf.indexOf('\n\n'))>=0){
+          const line=buf.slice(0,i).split('\n').find(l=>l.startsWith('data:')); buf=buf.slice(i+2);
+          if(!line) continue;
+          const ev=JSON.parse(line.slice(5).trim());
+          if(ev.type==='token'){ S.live+=ev.text; updateLive(); }
+          else if(ev.type==='result'){ S.dx=ev.result; S.dxState='result'; }
+          else if(ev.type==='error'){ throw new Error(ev.error); }
+        }
+      }
+      if(!S.dx) throw new Error('No diagnosis returned — the model may have timed out.');
+    }catch(e){ S.error=e.message; S.dxState='empty'; }
+    render();
+  },
+  tick(k){ S.ticks[k]=!S.ticks[k]; render(); },
+  toggleSrc(k){ S.srcOpen[k]=!S.srcOpen[k]; render(); },
+  saveCase(){
+    const dx=S.dx||{causes:[]}; const top=dx.causes[0]||{};
+    S.cases.unshift({ts:Date.now(), crop:cropLabel(S.intake.crop)||'', region:S.user.region||'', symptom:S.intake.symptom, diagnosis:top.name||'', grounding:top.grounding||'reasoning', dx:dx, followup:false});
+    persist(); go('cases');
+  },
+  openCase(i){ S.caseView=i; go('case'); },
+  escalateDx(){ S.intake={crop:'',stage:'',part:'',symptom:S.kbq||''}; S.dx=null; S.dxState='empty'; S.ticks={}; S.srcOpen={}; S.error=''; S.live=''; go('diagnose'); },
+  async kbSearch(q){
+    q=(q||'').trim(); if(!q) return;
+    S.kbq=q; S.kbState='loading'; S.kbError=''; S.kbResult=null; render();
+    try{ S.kbResult=await apiPost('/ask',{question:q}); }catch(e){ S.kbError=e.message+' — is the backend running?'; }
+    S.kbState=''; render();
+  },
+};
+window.A=A;
+render();
+</script>
+</body>
+</html>
