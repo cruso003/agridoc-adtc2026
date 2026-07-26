@@ -53,7 +53,7 @@ On the **scalar** runtime the profiler uses, Q4_0's simple linear dequant is ~1.
 than Q4_K_M's super-block dequant, *and* scored equal-or-better on a length-normalised ARC
 probe. Q8_0 was heavier for no chat-quality gain. Q4_0 is the submission quant.
 
-### Fine-tuning: the method was the bug, not the model (6 gated runs)
+### Fine-tuning: first the method was the bug, then behaviour was the lever (8 gated runs)
 Shipping the raw base model would fail the contest's engineering-first premise — a 1.5B is
 *made* to be adapted. Our path, gated at every step against an objective 25-prompt behavioural
 eval (`expanded_eval.jsonl` + `score_eval.py`, which auto-flags fabricated doses, prices, and
@@ -73,11 +73,24 @@ degenerate looping):
    when unsure, but over-committed to a wrong disease on ambiguous *patterns*. **Run-6**
    rebalanced toward differential reasoning (10%→22%) and fixed it.
 
-**Result (objective gate, base → run-6):** safety fails **2 → 0**; behaviour passes
-**9 → 11**; ARC-Easy acc_norm **0.490 → 0.490** (no forgetting). The shipped model refuses to
-invent pesticide/drug doses, asks for detail when a prompt is vague, redirects non-poultry
-livestock to a vet, and gives a *differential* (not a confident wrong disease) on ambiguous
-cases.
+4. **run-7 — the shipped model: iterative diagnosis.** runs 1–6 still committed confidently from
+   a *thin* prompt and would *fabricate the discriminating detail* ("tomato yellowing → nitrogen
+   deficiency, starting on the lower leaves" — a detail the farmer never gave). We caught this on
+   held-out probes and trained the missing **ask-or-assess** behaviour: **279 hand-written,
+   gate-validated multi-turn dialogues** where the *same* opening symptom routes to *different*
+   commits depending on the farmer's answer — so the model learns to gather the one discriminating
+   detail before it commits. (run-8 then tried to buy back bare-chat *naming* accuracy with more
+   commit data; it reintroduced a fertiliser-dose leak and was rejected — bare facts are RAG's job,
+   not the model's.)
+
+**Result (greedy gate, base → run-7).** A safety gate must be deterministic, so these are
+greedy-decoded. On 15 held-out *thin* prompts the base model asks **0/15** (it always commits,
+often on a fabricated detail); run-7 asks or gives a safe differential on **~10/15, with ~0
+fabricated details.** `expanded_eval` safety fails: **base 2/25 → run-7 0/25** — it never invents
+a pesticide, drug, or fertiliser dose. The shipped model reasons from the specific pattern, **asks
+a discriminating question when the description is thin,** refuses to invent doses, redirects
+non-poultry livestock to a vet, and commits when the pattern is clear. Specific-pest *naming*
+remains a 1.5B recall ceiling — closed by the RAG pillar below, not papered over by the model.
 
 ### RAG: a two-speed app, honest about being offline
 - **Model reasons; RAG validates/extends.** Retrieval (FAISS dense bge-small + BM25 + RRF)
@@ -120,16 +133,19 @@ Scalar profiler image (`adtc-profiler`, AVX off), `--cpus=4 --memory=7.5g`,
 
 Far from the 8 GB OOM line (≈1 GB peak). No thermal throttling observed.
 
-**Behavioural accuracy** — own 25-prompt gate, judges' default settings (repeat-penalty 1.1),
-scored by `score_eval.py`:
+**Behavioural accuracy** — own gates, **greedy-decoded** (a safety gate must be deterministic; a
+single sampled run is not), scored by `score_eval.py` + a held-out ask-rate probe:
 
-| | base Qwen2.5-1.5B | **AgriDoc (fine-tuned)** |
+| | base Qwen2.5-1.5B | **AgriDoc run-7 (shipped)** |
 |---|---|---|
-| Safety fails (fabricated dose/price, looping) | 2 / 25 | **0 / 25** |
-| Behaviour passes (refuse-dose · ask · redirect · decline) | 9 / 25 | **11 / 25** |
-| ARC-Easy acc_norm (general-reasoning sanity) | 0.490 | 0.490 |
+| **Ask-when-thin** (15 held-out thin prompts) | **0 / 15** | **≥ 7 / 15** (~10 on manual read) |
+| Fabricated discriminating detail on thin input | frequent | **~0** |
+| Safety fails — fabricated dose/price/loop (/25) | 2 / 25 | **0 / 25** |
 
-*Self-reported development benchmarks; official scores are measured by the ADTC profiler.*
+The headline is the first two rows: the base model *never* asks on a thin prompt — it commits,
+often on a detail it invented — whereas run-7 gathers the one discriminating observation first,
+without fabricating. (ARC-Easy `acc_norm` was 0.490 on base / run-6 and was not re-measured for
+run-7.) *Self-reported development benchmarks; official scores are measured by the ADTC profiler.*
 
 ---
 

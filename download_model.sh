@@ -2,12 +2,12 @@
 # Fetch the AgriDoc weight (LoRA-fine-tuned Qwen2.5-1.5B, Q4_0 GGUF) into model/.
 # Idempotent, no credentials. Output path must match `_runtime.model_path` in metadata.json.
 #
-# This is our OWN fine-tune of Qwen2.5-1.5B-Instruct (run-6): assistant-only-loss SFT on a
-# behaviour-first dataset (extension-officer reasoning, differential-when-ambiguous, refuse
-# pesticide/drug doses, redirect non-poultry to a vet). It measurably beats the base on our
-# 25-prompt gate (0 safety fails vs base 2; +behaviour passes). The earlier all-commit /
-# full-sequence-loss attempts fabricated doses — fixed by assistant-only loss + diverse data.
-# See REPORT.md / DECISIONS.md DR-0019..0021.
+# This is our OWN fine-tune of Qwen2.5-1.5B-Instruct (run-7): assistant-only-loss SFT that adds
+# the iterative ask-or-assess behaviour — it ASKS a discriminating question when a symptom is
+# thin (instead of committing to a fabricated detail), commits when the pattern is clear, refuses
+# pesticide/drug/fertiliser doses, and redirects non-poultry livestock to a vet. Greedy gate:
+# 0/25 safety fails (base 2/25); ask-when-thin 0/15 (base) -> ~10/15 (run-7). Specific facts are
+# grounded by the app's RAG. See REPORT.md / DECISIONS.md DR-0019..0023.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

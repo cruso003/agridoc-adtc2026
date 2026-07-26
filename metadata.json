@@ -12,7 +12,7 @@
   "cross_disciplinary_pairing": {
     "discipline": "agriculture",
     "load_bearing": true,
-    "description": "AgriDoc pairs a LoRA-fine-tuned Qwen2.5-1.5B (taught extension-officer reasoning: commit when clear, give a differential when the pattern is ambiguous, refuse pesticide/drug doses, redirect non-poultry livestock to a vet) with load-bearing RAG over a local crop/livestock corpus: the app retrieves and computes grounding from cosine similarity, and every cause is labelled library-backed vs reasoned. Fully offline on an 8 GB laptop via llama.cpp."
+    "description": "AgriDoc pairs a LoRA-fine-tuned Qwen2.5-1.5B (taught extension-officer reasoning: ask a discriminating question when the description is thin instead of guessing, commit when the pattern is clear, refuse pesticide/drug/fertiliser doses, redirect non-poultry livestock to a vet) with load-bearing RAG over a local crop/livestock corpus: the app retrieves and computes grounding from cosine similarity, and every cause is labelled library-backed vs reasoned. Fully offline on an 8 GB laptop via llama.cpp."
   },
   "test_prompts": [
     { "prompt_id": "tp_001", "prompt": "My maize leaves have pale streaks running along the veins and growth is stunted. What is the likely cause and what should I do?" },
