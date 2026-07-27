@@ -14,3 +14,6 @@ __pycache__/
 # Local profiler output
 submission.json
 audit.json
+
+# Generated RAG index (rebuild with: python -m rag index) — source of truth is chunks.jsonl
+app/adtc-bench-workspace/rag_index/

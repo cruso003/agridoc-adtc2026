@@ -1,0 +1,13 @@
+# Ollama Modelfile for the AgriDoc GGUF (local, offline serving).
+# Build:  ollama create agridoc -f Modelfile.agridoc
+# The GGUF already carries Qwen2.5's ChatML template; we pin the stop token and
+# a low temperature to match the app's grounded, deterministic contract.
+FROM ../model/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf
+
+PARAMETER temperature 0.2
+PARAMETER stop "<|im_end|>"
+PARAMETER num_ctx 4096
+# Curb the 1.5B's tendency to loop on long structured answers (the ASK field would
+# otherwise repeat questions until max_tokens). The app doesn't send these, so they apply.
+PARAMETER repeat_penalty 1.15
+PARAMETER repeat_last_n 256

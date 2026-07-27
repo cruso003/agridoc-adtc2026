@@ -14,11 +14,18 @@ from . import config
 
 
 def health(server: str, timeout: float = 5.0) -> bool:
-    try:
-        with urllib.request.urlopen(server.rstrip("/") + "/health", timeout=timeout) as r:
-            return r.status == 200
-    except Exception:
-        return False
+    """Reachable-and-ready check. Tries llama-server's /health first, then falls back to
+    the OpenAI-compatible /v1/models so any OpenAI-style backend (Ollama, vLLM, etc.)
+    also passes — the chat call itself only ever needs /v1/chat/completions."""
+    base = server.rstrip("/")
+    for path in ("/health", "/v1/models"):
+        try:
+            with urllib.request.urlopen(base + path, timeout=timeout) as r:
+                if r.status == 200:
+                    return True
+        except Exception:
+            continue
+    return False
 
 
 def chat(

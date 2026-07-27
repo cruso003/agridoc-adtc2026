@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AgriDoc — Field Advisory Workbench</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Offline-first: NO external fonts. The app must make zero network requests (it claims
+     "100% offline"), so we rely on high-quality system-font stacks below rather than
+     loading Spectral / IBM Plex from Google Fonts. Degrades identically online or offline. -->
 <style>
   :root{
     --spine:#1B3826;--spine-2:#234730;--green:#2F6B43;--green-d:#234E36;--green-t:#E6EFDC;
@@ -16,9 +16,9 @@
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;height:100%}
-  body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink)}
-  .mono{font-family:'IBM Plex Mono',monospace}
-  .serif{font-family:'Spectral',serif}
+  body{font-family:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:var(--paper);color:var(--ink)}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}
+  .serif{font-family:'Spectral','Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif}
   ::-webkit-scrollbar{width:11px;height:11px}
   ::-webkit-scrollbar-thumb{background:#cdbfa3;border-radius:8px;border:3px solid transparent;background-clip:content-box}
   @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
@@ -186,6 +186,7 @@ function shell(inner){
       <nav style="display:flex;flex-direction:column;gap:3px">
         <button onclick="A.go('home')" class="nav ${S.screen==='home'?'on':''}"><span style="width:15px;height:15px;border:2px solid currentColor;border-radius:50%;opacity:.9"></span>Today</button>
         <button onclick="A.go('cases')" class="nav ${S.screen==='cases'?'on':''}"><span style="width:15px;height:15px;display:flex;flex-direction:column;gap:2.5px;justify-content:center"><i style="height:2px;background:currentColor;border-radius:2px"></i><i style="height:2px;width:70%;background:currentColor;border-radius:2px"></i><i style="height:2px;background:currentColor;border-radius:2px"></i></span>Cases<span class="mono" style="margin-left:auto;font-size:11px;background:rgba(255,255,255,.12);padding:1px 7px;border-radius:99px">${S.cases.length}</span></button>
+        <button onclick="A.go('kb')" class="nav ${S.screen==='kb'?'on':''}"><span style="width:15px;height:15px;border:2px solid currentColor;border-radius:3px;position:relative;display:flex"><i style="position:absolute;left:50%;top:1.5px;bottom:1.5px;width:2px;background:currentColor;transform:translateX(-50%)"></i></span>Reference notes</button>
       </nav>
       <div style="flex:1"></div>
       ${pat[0]?`<div style="border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:12px;background:rgba(255,255,255,.04)"><div class="mono" style="font-size:9.5px;font-weight:600;letter-spacing:.08em;color:#7E8C78;margin-bottom:8px">FROM YOUR CASE RECORDS</div><div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#C2CDBC;line-height:1.35"><span style="color:#E0A24E;font-size:14px">↗</span>${esc(pat[0].body)}</div></div>`:''}
