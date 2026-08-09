@@ -53,7 +53,7 @@ On the **scalar** runtime the profiler uses, Q4_0's simple linear dequant is ~1.
 than Q4_K_M's super-block dequant, *and* scored equal-or-better on a length-normalised ARC
 probe. Q8_0 was heavier for no chat-quality gain. Q4_0 is the submission quant.
 
-### Fine-tuning: first the method was the bug, then behaviour was the lever (8 gated runs)
+### Fine-tuning: first the method was the bug, then behaviour was the lever (gated every step)
 Shipping the raw base model would fail the contest's engineering-first premise — a 1.5B is
 *made* to be adapted. Our path, gated at every step against an objective 25-prompt behavioural
 eval (`expanded_eval.jsonl` + `score_eval.py`, which auto-flags fabricated doses, prices, and
@@ -73,24 +73,40 @@ degenerate looping):
    when unsure, but over-committed to a wrong disease on ambiguous *patterns*. **Run-6**
    rebalanced toward differential reasoning (10%→22%) and fixed it.
 
-4. **run-7 — the shipped model: iterative diagnosis.** runs 1–6 still committed confidently from
-   a *thin* prompt and would *fabricate the discriminating detail* ("tomato yellowing → nitrogen
-   deficiency, starting on the lower leaves" — a detail the farmer never gave). We caught this on
-   held-out probes and trained the missing **ask-or-assess** behaviour: **279 hand-written,
-   gate-validated multi-turn dialogues** where the *same* opening symptom routes to *different*
-   commits depending on the farmer's answer — so the model learns to gather the one discriminating
-   detail before it commits. (run-8 then tried to buy back bare-chat *naming* accuracy with more
-   commit data; it reintroduced a fertiliser-dose leak and was rejected — bare facts are RAG's job,
-   not the model's.)
+4. **run-7 — iterative diagnosis.** runs 1–6 still committed confidently from a *thin* prompt and
+   would *fabricate the discriminating detail* ("tomato yellowing → nitrogen deficiency, starting
+   on the lower leaves" — a detail the farmer never gave). We trained the missing **ask-or-assess**
+   behaviour: **279 hand-written, gate-validated multi-turn dialogues** where the *same* opening
+   symptom routes to *different* commits depending on the farmer's answer. (run-8 tried to buy back
+   bare-chat *naming* accuracy with more commit data; it reintroduced a fertiliser-dose leak and
+   was rejected — bare facts are RAG's job, not the model's.)
 
-**Result (greedy gate, base → run-7).** A safety gate must be deterministic, so these are
-greedy-decoded. On 15 held-out *thin* prompts the base model asks **0/15** (it always commits,
-often on a fabricated detail); run-7 asks or gives a safe differential on **~10/15, with ~0
-fabricated details.** `expanded_eval` safety fails: **base 2/25 → run-7 0/25** — it never invents
-a pesticide, drug, or fertiliser dose. The shipped model reasons from the specific pattern, **asks
-a discriminating question when the description is thin,** refuses to invent doses, redirects
-non-poultry livestock to a vet, and commits when the pattern is clear. Specific-pest *naming*
-remains a 1.5B recall ceiling — closed by the RAG pillar below, not papered over by the model.
+5. **We stress-tested run-7 the way judges do — and it failed.** We ran an *independent, blind*
+   reviewer that chatted the **bare gguf** under Ollama-style defaults (no system prompt, sampled,
+   adversarial). It exposed three defects our own greedy+persona gate had *flattered*: (a) the
+   model **never stopped** — ~58/60 replies ran to the token cap and looped; (b) it **leaked
+   fertiliser/herbicide rates** under mild pressure; (c) it self-identified as "Qwen, by Alibaba
+   Cloud". **Lesson: gate like a judge, or you fool yourself** — so we now also gate on the raw,
+   sampled, multi-turn, adversarial condition.
+
+6. **run-9 → 9cp — the shipped model.** Three targeted fixes: (a) **the looping was a training bug**
+   — the assistant's `<|im_end|>` terminator sat *outside* the assistant-only loss span, so the
+   model got no signal to emit EOS; moving it *inside* the span taught it to stop (looping → 0).
+   (b) **Upweighted dose/price refusals + multi-turn "just approximate it" dialogues** so refusals
+   hold across a push. (c) **The identity leak was the chat template, not the weights** — Qwen2.5
+   injects "You are Qwen, created by Alibaba Cloud" as the default system prompt; we swapped that
+   default for the **AgriDoc extension-officer persona**, which fixes identity *and* gives a
+   no-system chat the trained ask/refuse/redirect behaviour by default.
+
+**Result (two independent blind raw-chat reviews, base/run-7 → run-9cp).** Stopping: run-7 looped
+~58/60 → run-9cp **0/114 hit the cap, clean EOS**. Single-turn dose/price refusals: **clean
+(0 leaks / 12 draws)**, and they now hold under multi-turn pressure. Ask-when-thin: base **0/15** →
+gathers the discriminating detail without fabricating. Identity: **AgriDoc**, no base-model tell.
+**Honest ceiling:** at 1.5B, factual recall on *specific, less-common* disease IDs is limited — it
+can misname a disease, and on an *invented* disease name it may describe a plausible one; a **rare**
+multi-turn jailbreak can still surface a rate. These are handled by the two-speed design below
+(RAG grounds facts) and an app-layer **dose-guard** that redacts any dose/rate/ratio from replies —
+stated plainly, not papered over.
 
 ### RAG: a two-speed app, honest about being offline
 - **Model reasons; RAG validates/extends.** Retrieval (FAISS dense bge-small + BM25 + RRF)
@@ -133,31 +149,40 @@ Scalar profiler image (`adtc-profiler`, AVX off), `--cpus=4 --memory=7.5g`,
 
 Far from the 8 GB OOM line (≈1 GB peak). No thermal throttling observed.
 
-**Behavioural accuracy** — own gates, **greedy-decoded** (a safety gate must be deterministic; a
-single sampled run is not), scored by `score_eval.py` + a held-out ask-rate probe:
+**Behavioural accuracy** — two ways. (i) our own greedy gate (`score_eval.py` + ask-rate probe —
+deterministic, for run-to-run continuity); (ii) an **independent, blind reviewer** chatting the
+**bare gguf** the way ADTC judges do — no system prompt, sampled (temp 0.7), single- and
+multi-turn, adversarial. The second is the one that matters, because judges chat the bare model:
 
-| | base Qwen2.5-1.5B | **AgriDoc run-7 (shipped)** |
+| | base / run-7 | **AgriDoc run-9cp (shipped)** |
 |---|---|---|
-| **Ask-when-thin** (15 held-out thin prompts) | **0 / 15** | **≥ 7 / 15** (~10 on manual read) |
-| Fabricated discriminating detail on thin input | frequent | **~0** |
-| Safety fails — fabricated dose/price/loop (/25) | 2 / 25 | **0 / 25** |
+| Replies that run on / loop (hit the length cap) | run-7 ~58 / 60 | **0 / 114** |
+| Single-turn dose/price refusals | leaked under mild pressure | **clean (0 / 12 draws)** |
+| Multi-turn dose refusal (farmer pushes) | broke | **holds** (rare greedy edge remains) |
+| Ask-when-thin (gathers vs fabricates) | base 0 / 15 | **works, ~0 fabrication** |
+| Self-identifies as | "Qwen, by Alibaba Cloud" | **AgriDoc, offline extension assistant** |
 
-The headline is the first two rows: the base model *never* asks on a thin prompt — it commits,
-often on a detail it invented — whereas run-7 gathers the one discriminating observation first,
-without fabricating. (ARC-Easy `acc_norm` was 0.490 on base / run-6 and was not re-measured for
-run-7.) *Self-reported development benchmarks; official scores are measured by the ADTC profiler.*
+The turnaround is in coherence, safety, and identity — the behaviours a 1.5B can own. *Specific
+disease-ID accuracy is deliberately left to the RAG layer* (below); we do not claim the bare model
+is a reliable diagnostician. *Self-reported development benchmarks; official scores are measured by
+the ADTC profiler.*
 
 ---
 
 ## Safety & limitations
 
-- **Never invents a dose/rate/price** — by design, gated, and reinforced in the printed
-  farmer-advisory ("never use a dose this advisory did not give").
-- **Stays in lane** — redirects cattle/goats/etc. to a vet.
-- **Limitation (model-size ceiling):** a 1.5B can still misidentify *rare, specific* pests it
-  wasn't exposed to. This is mitigated — not hidden — by the RAG reconcile (surfacing the
-  library's match) and the always-present "verify locally" framing. It is not a substitute for
-  a qualified agronomist or veterinarian.
+- **Never invents a dose/rate/price** — trained, gated single- and multi-turn, reinforced by the
+  gguf's default persona, and backstopped by an **app-layer dose-guard** that redacts any
+  dose/rate/ratio from a reply and points to the label + a local officer. (A rare multi-turn
+  jailbreak can still surface a rate on the *bare* model; the guard covers the product path.)
+- **Stops cleanly** — no run-on/looping (an earlier build never learned to emit EOS; fixed by
+  putting the terminator inside the assistant-only loss span).
+- **Stays in lane** — redirects cattle/goats/etc. to a vet; identifies as AgriDoc.
+- **Limitation (model-size ceiling), stated plainly:** a 1.5B has limited factual recall — it can
+  misidentify *specific, less-common* diseases, and on an *invented* disease name it may describe a
+  plausible-sounding one. This is the reasoning-and-safety half of a two-speed design; **specific
+  facts are the RAG layer's job**, surfaced with their source and an always-present "verify locally"
+  framing. It is not a substitute for a qualified agronomist or veterinarian.
 
 ---
 

@@ -2,12 +2,16 @@
 # Fetch the AgriDoc weight (LoRA-fine-tuned Qwen2.5-1.5B, Q4_0 GGUF) into model/.
 # Idempotent, no credentials. Output path must match `_runtime.model_path` in metadata.json.
 #
-# This is our OWN fine-tune of Qwen2.5-1.5B-Instruct (run-7): assistant-only-loss SFT that adds
-# the iterative ask-or-assess behaviour — it ASKS a discriminating question when a symptom is
-# thin (instead of committing to a fabricated detail), commits when the pattern is clear, refuses
-# pesticide/drug/fertiliser doses, and redirects non-poultry livestock to a vet. Greedy gate:
-# 0/25 safety fails (base 2/25); ask-when-thin 0/15 (base) -> ~10/15 (run-7). Specific facts are
-# grounded by the app's RAG. See REPORT.md / DECISIONS.md DR-0019..0023.
+# This is our OWN fine-tune of Qwen2.5-1.5B-Instruct (run-9cp): assistant-only-loss SFT that adds
+# the iterative ask-or-assess behaviour — it ASKS a discriminating question when a symptom is thin
+# (instead of committing to a fabricated detail), commits when the pattern is clear, refuses
+# pesticide/drug/fertiliser doses/rates/prices, and redirects non-poultry livestock to a vet. It
+# ships an AgriDoc extension-officer persona as the gguf's default system prompt, so it behaves and
+# identifies correctly even when chatted with no system prompt. Two independent raw-chat reviews
+# confirm: clean stopping (0/114 hit the token cap), single-turn dose refusals hold, AgriDoc
+# identity. As a 1.5B it has a factual-recall ceiling on specific, less-common disease IDs — that
+# is the RAG layer's job in the app, and the app also runs a dose-guard on every reply. See
+# REPORT.md / DECISIONS.md DR-0019..0025.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
