@@ -1,13 +1,15 @@
 # Ollama Modelfile for the AgriDoc GGUF (local, offline serving).
 # Build:  ollama create agridoc -f Modelfile.agridoc
-# The GGUF already carries Qwen2.5's ChatML template; we pin the stop token and
-# a low temperature to match the app's grounded, deterministic contract.
+# The GGUF (run-9cp) already carries Qwen2.5's ChatML template with the AgriDoc
+# extension-officer persona baked in as the DEFAULT system prompt — so `ollama run agridoc`
+# identifies and behaves as AgriDoc (asks when thin, refuses doses, redirects) with no extra
+# config. We pin the stop token and a low temperature for a grounded, deterministic contract.
 FROM ../model/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf
 
 PARAMETER temperature 0.2
 PARAMETER stop "<|im_end|>"
 PARAMETER num_ctx 4096
-# Curb the 1.5B's tendency to loop on long structured answers (the ASK field would
-# otherwise repeat questions until max_tokens). The app doesn't send these, so they apply.
+# run-9cp fixed the looping at the model level (it learned to emit EOS), so these are a
+# belt-and-suspenders for direct `ollama run` chat. The app sends its own decode params.
 PARAMETER repeat_penalty 1.15
 PARAMETER repeat_last_n 256

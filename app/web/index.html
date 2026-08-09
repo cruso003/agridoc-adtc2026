@@ -82,7 +82,7 @@ let S = {
   user: saved.user || {name:'',role:'',region:'',crops:[],lang:'en'},
   cases: saved.cases || [],
   intake: {crop:'',stage:'',part:'',symptom:''},
-  dx: null, dxState:'empty', dxOpen:{}, srcOpen:{}, ticks:{}, error:'', live:'',
+  dx: null, dxTurns: [], dxState:'empty', dxOpen:{}, srcOpen:{}, ticks:{}, error:'', live:'',
 };
 function persist(){ localStorage.setItem('agridoc', JSON.stringify({user:S.user, cases:S.cases})) }
 const esc = s => (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -97,15 +97,19 @@ async function apiPost(path, body){
   return r.json();
 }
 
-// live reasoning view: strip the THINKING: label, and once the structured part
-// begins (CAUSE:) show only the reasoning + a "drafting" note.
+// live reply view: run-7 replies in natural prose, so just stream it with a cursor.
 function liveText(raw){
-  let t=(raw||'').replace(/^\s*THINKING:\s*/i,'');
-  const idx=t.search(/\n?\s*CAUSE:/i);
-  if(idx>=0) return esc(t.slice(0,idx).trim())+'<span style="color:var(--muted)">\n\n→ drafting the assessment…</span>';
-  return esc(t)+'<span style="color:var(--green);animation:blink 1s infinite">▍</span>';
+  return esc(raw||'')+'<span style="color:var(--green);animation:blink 1s infinite">▍</span>';
 }
-function updateLive(){ const el=document.getElementById('liveThink'); if(el){ el.innerHTML=liveText(S.live); el.scrollTop=el.scrollHeight; } }
+function updateLive(){ const el=document.getElementById('liveReply')||document.getElementById('liveThink'); if(el){ el.innerHTML=liveText(S.live); el.scrollTop=el.scrollHeight; } }
+// standing farm context so the officer doesn't re-ask what onboarding already told it
+function farmProfile(){
+  const u=S.user||{}; const p={};
+  if(u.region&&u.region.trim()) p.location=u.region.trim();
+  const crops=(u.crops||[]).map(id=>cropLabel(id)).filter(Boolean);
+  if(crops.length) p.enterprise='grows '+crops.join(', ');
+  return Object.keys(p).length?p:null;
+}
 
 //==================== logo ====================
 const logo = (sz)=>`<div class="logo" style="width:${sz}px;height:${sz}px;box-shadow:0 2px 10px rgba(0,0,0,.25)"><span class="stem" style="height:${sz*.33}px"></span><span class="lf1"></span><span class="lf2"></span></div>`;
@@ -308,7 +312,7 @@ function diagnose(){
     <div style="flex:none;padding:14px 20px;border-top:1px solid var(--line-2)"><button id="runBtn" onclick="A.runDx()" ${canRun?'':'disabled'} class="btn-green" style="width:100%;opacity:${canRun?1:.4}">${S.dxState==='loading'?'Working…':'Run diagnosis'}</button><div id="runHint" style="display:${canRun?'none':'block'};font-size:11px;color:var(--muted);text-align:center;margin-top:7px">Describe what you see above — the details alone aren't enough to diagnose.</div></div>
   </div>`;
   let work='';
-  if(S.error) work=`<div class="card" style="max-width:520px;padding:18px 20px;border-color:var(--terra);color:var(--terra)"><strong>Couldn't run the diagnosis.</strong><div style="font-size:13px;margin-top:6px;color:#7a4a3a">${esc(S.error)}</div><div style="font-size:12px;margin-top:8px;color:var(--muted)">Make sure the local model server and <span class="mono">rag serve</span> are running.</div></div>`;
+  if(S.error && !(S.dxTurns||[]).length) work=`<div class="card" style="max-width:520px;padding:18px 20px;border-color:var(--terra);color:var(--terra)"><strong>Couldn't run the diagnosis.</strong><div style="font-size:13px;margin-top:6px;color:#7a4a3a">${esc(S.error)}</div><div style="font-size:12px;margin-top:8px;color:var(--muted)">Make sure the local model server and <span class="mono">rag serve</span> are running.</div></div>`;
   else if(S.dxState==='empty') work=`<div style="max-width:560px">
     <div class="serif" style="font-size:21px;font-weight:700;margin-bottom:4px">Describe what you're seeing →</div>
     <p style="font-size:14px;color:var(--muted);line-height:1.55;margin:0 0 22px">Use the intake on the left. AgriDoc reasons through the likely causes, asks one question to narrow it down, and shows where its answer comes from. The more you describe, the sharper it gets.</p>
@@ -321,55 +325,46 @@ function diagnose(){
       'My beans have orange rusty pustules under the leaves that rub off on my finger.'
     ].map(ex=>`<button onclick="A.tryExample('${esc(ex).replace(/'/g,"\\'")}')" class="card" style="text-align:left;padding:12px 14px;cursor:pointer;font-size:13.5px;line-height:1.45;color:#33312a">"${esc(ex)}"</button>`).join('')}</div>
   </div>`;
-  else if(S.dxState==='loading') work=`<div class="card" style="padding:20px 22px;max-width:680px">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <span style="display:flex;gap:5px"><i style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1.2s infinite both"></i><i style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1.2s .2s infinite both"></i><i style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1.2s .4s infinite both"></i></span>
-      <span style="font-size:14.5px;font-weight:600">AgriDoc is reasoning — on this laptop</span>
-      <span class="mono" style="margin-left:auto;font-size:10px;letter-spacing:.04em;color:var(--green-d);background:var(--green-t);border-radius:5px;padding:2px 7px">● LIVE</span>
-    </div>
-    <div id="liveThink" style="white-space:pre-wrap;font-size:13.5px;line-height:1.6;color:#33312a;margin:0;font-family:'Spectral',Georgia,serif;min-height:48px;max-height:360px;overflow-y:auto">${S.live?liveText(S.live):'<span style="color:var(--muted)">Reading the pattern in what you described…</span>'}</div>
-  </div>`;
-  else if(S.dxState==='result'&&S.dx) work=dxResult(S.dx);
+  else if(S.dxTurns&&S.dxTurns.length) work=dxThread();
   return `<section style="flex:1;display:flex;min-height:0">${intake}<div id="work" style="flex:1;min-width:0;overflow-y:auto"><div style="max-width:720px;margin:0 auto;padding:26px 36px 40px">${work}</div></div></section>`;
 }
-function dxResult(d){
-  const cards=(d.causes||[]).map((c,i)=>dxCard(c,i)).join('');
-  const ask=d.ask?`<div class="card" style="background:linear-gradient(180deg,#F6F1E4,var(--card));padding:16px 19px;margin-bottom:18px"><div style="display:flex;align-items:center;gap:9px;margin-bottom:7px"><span style="width:22px;height:22px;border-radius:7px;background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">?</span><span class="serif" style="font-size:16px;font-weight:600">Answer this to narrow it down</span></div><p style="margin:0;font-size:14.5px;line-height:1.55;color:#33312a">${esc(d.ask)}</p><p style="margin:9px 0 0;font-size:12px;color:var(--muted)">Add what you find to your description on the left and run it again for a sharper result.</p></div>`:'';
-  return `<div><div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><h2 class="serif" style="margin:0;font-size:21px;font-weight:700">Assessment</h2><span class="mono" style="font-size:11.5px;color:var(--muted)">${d.causes.length} possibilit${d.causes.length>1?'ies':'y'} · most likely first</span></div>
-    <p style="margin:0 0 18px;font-size:13px;line-height:1.55;color:var(--muted)">I reasoned this through from what you described. Where a reference note shaped my answer I show the source on the card. I'm a small offline assistant — always check against what you see in the field before acting.</p>
-    ${cards}${ask}${dxWorking(d)}
-    <div class="no-print" style="display:flex;flex-wrap:wrap;gap:9px;padding-top:18px;border-top:1px solid var(--line)"><button onclick="A.saveCase()" class="btn-green" style="padding:11px 17px;font-size:13.5px">✓ Save to case record</button><button onclick="window.print()" class="btn-ghost">⤓ Print farmer advisory</button></div><div class="print-doc">${advisory(d,{crop:cropLabel(S.intake.crop),date:Date.now(),who:S.user.name,symptom:S.intake.symptom})}</div></div>`;
+// ---- conversational diagnosis (run-7 replies in natural prose, multi-turn) ----
+function dxThread(){
+  const turns=S.dxTurns||[];
+  const last=turns[turns.length-1];
+  const bubbles=turns.map(t=> t.role==='farmer'?farmerBubble(t):officerBlock(t)).join('');
+  const streaming = S.dxState==='loading' ? `<div style="margin:16px 0"><div class="mono" style="font-size:10.5px;font-weight:700;color:var(--green-d);margin-bottom:6px">● AGRIDOC · offline</div><div id="liveReply" style="white-space:pre-wrap;font-size:15px;line-height:1.65;color:#33312a;font-family:'Spectral',Georgia,serif;min-height:24px">${S.live?liveText(S.live):'<span style="color:var(--muted)">Reading the pattern in what you described…</span>'}</div></div>` : '';
+  const committed = last && last.role==='officer' && !last.asked && S.dxState!=='loading';
+  let footer='';
+  if(S.dxState!=='loading' && last && last.role==='officer' && last.asked){
+    footer=`<div class="no-print" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px"><div class="mono" style="font-size:10.5px;font-weight:700;color:var(--green-d);margin-bottom:8px">YOUR ANSWER</div><textarea id="dxAnswer" rows="3" placeholder="Answer the question above — what you find when you check." style="width:100%;border:1.5px solid var(--green);border-radius:11px;padding:11px 13px;font-size:14px;line-height:1.5;outline:none;resize:none;font-family:inherit" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))A.answerDx()"></textarea><div style="display:flex;gap:9px;margin-top:9px;align-items:center"><button onclick="A.answerDx()" class="btn-green">Reply →</button><span style="font-size:11.5px;color:var(--muted)">Ctrl/⌘+Enter to send</span></div></div>`;
+  }
+  const err = S.error?`<div class="card" style="margin-top:12px;padding:14px 16px;border-color:var(--terra);color:var(--terra)"><strong>Something went wrong.</strong><div style="font-size:13px;margin-top:5px;color:#7a4a3a">${esc(S.error)}</div></div>`:'';
+  const printDoc = committed?`<div class="print-doc">${advisory({turns:turns},{crop:cropLabel(S.intake.crop),date:Date.now(),who:S.user.name})}</div>`:'';
+  return `<div>${bubbles}${streaming}${err}${footer}${printDoc}</div>`;
 }
-function dxWorking(d){
-  const open=S.srcOpen['work'];
-  const src=(d.related||[]).map((s)=>`<div style="display:flex;gap:9px;margin-bottom:8px"><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:7px"><span class="pill" style="color:#fff;background:#8a857a">${esc(s.origin)}</span><span style="font-size:12.5px;font-weight:600">${esc(s.title)}</span></div><div style="font-size:12px;color:var(--muted);line-height:1.45;border-left:2px solid var(--line);padding-left:10px;margin-top:5px">"${esc(s.snippet)}"</div></div></div>`).join('');
-  return `<div class="no-print" style="margin:6px 0 20px">
-    <button onclick="A.toggleSrc('work')" class="mono" style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer">⚙ ${open?'Hide':'See'} how I reasoned</button>
-    ${open?`<div class="card" style="margin-top:10px;padding:16px 18px;background:rgba(246,241,228,.5)">
-      <div class="mono" style="font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:7px">MY REASONING</div>
-      <div class="serif" style="font-size:13.5px;line-height:1.6;color:#33312a;margin-bottom:16px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:11px 13px">${esc(d.thinking)||'<span style="color:var(--muted)">I did not separate out my reasoning this time.</span>'}</div>
-      <div class="mono" style="font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:9px">REFERENCE NOTES I CHECKED <span style="font-weight:400;text-transform:none;letter-spacing:0">— from my offline notes, bundled ${ASOF}</span></div>
-      ${src||'<div style="font-size:12.5px;color:var(--muted)">Nothing closely matched — I answered from my own knowledge.</div>'}
-      <div style="font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5">Everything ran on this laptop, fully offline. My knowledge — both what I learned and these reference notes — is from around ${ASOF}, so I can't see anything newer. Treat time-sensitive details (rates, prices, new varieties) as needing a local check.</div>
-    </div>`:''}
+function farmerBubble(t){
+  return `<div style="display:flex;justify-content:flex-end;margin:12px 0"><div style="max-width:82%;background:var(--green-t);color:#25301f;border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:14px;line-height:1.5">${esc(t.content)}</div></div>`;
+}
+function officerBlock(t){
+  const committed=!t.asked;
+  return `<div style="margin:16px 0"><div class="mono" style="font-size:10.5px;font-weight:700;color:var(--green-d);margin-bottom:6px">● AGRIDOC${t.asked?' · asking a question':''}</div>
+    <div style="white-space:pre-wrap;font-size:15px;line-height:1.65;color:#33312a;font-family:'Spectral',Georgia,serif">${esc(t.content)}</div>
+    ${t.reference_note?refNote(t.reference_note):''}
+    ${committed?dxSources(t):''}
+    ${committed?`<div class="no-print" style="display:flex;flex-wrap:wrap;gap:9px;margin-top:14px"><button onclick="A.saveCase()" class="btn-green" style="padding:10px 16px;font-size:13.5px">✓ Save to case record</button><button onclick="window.print()" class="btn-ghost">⤓ Print advisory</button></div>`:''}
   </div>`;
 }
-function dxCard(c,i){
-  const lib = c.grounding==='library';
-  const big = c.rank==='most_likely';
-  const rankLabel = {most_likely:'MOST LIKELY',also_consider:'ALSO CONSIDER'}[c.rank]||'';
-  const rankBg = big?'var(--green)':'var(--amber-t)';
-  const rankFg = big?'#fff':'var(--amber-d)';
-  const actions = c.actions&&c.actions.length?`<div style="padding:2px 20px 16px"><div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--green-d);margin:12px 0 8px">DO / CHECK</div><div style="display:flex;flex-direction:column;gap:3px">${c.actions.map((a,j)=>`<button onclick="A.tick('a${i}_${j}')" style="display:flex;gap:11px;align-items:flex-start;text-align:left;background:transparent;border:none;border-radius:9px;padding:7px 10px;width:100%"><span class="check ${S.ticks['a'+i+'_'+j]?'on':''}">${S.ticks['a'+i+'_'+j]?'✓':''}</span><span style="font-size:14px;line-height:1.5;color:#33312a">${esc(a)}</span></button>`).join('')}</div></div>`:'';
-  // sources shown as a dated CITATION (where it came from), not a "library" verdict badge
-  const srcBox = (c.sources&&c.sources.length)?`<div style="margin:2px 20px 14px"><div class="mono" style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px">WHERE THIS COMES FROM</div>${c.sources.map(s=>`<div style="background:rgba(246,241,228,.6);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:6px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span class="pill" style="color:#fff;background:#8a857a">${esc(s.origin)}</span><span style="font-size:12px;font-weight:600">${esc(s.title)}</span></div><div style="font-size:12px;line-height:1.45;color:#46503e;border-left:2px solid var(--line);padding-left:10px">"${esc(s.snippet)}"</div></div>`).join('')}<div style="font-size:11px;color:var(--muted);line-height:1.45">From my offline reference notes (bundled ${ASOF}) — may be out of date; confirm time-sensitive things (rates, prices, new varieties) with your local extension officer.</div></div>`:'';
-  return `<div class="card" style="overflow:hidden;margin-bottom:11px;${big?'border-color:#CFE0C2;box-shadow:0 4px 16px rgba(47,107,67,.08)':''}">
-    <div style="padding:16px 20px 4px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap"><span class="pill" style="color:${rankFg};background:${rankBg}">${rankLabel}</span></div>
-      <h3 class="serif" style="margin:0 0 7px;font-size:${big?'21px':'18px'};font-weight:700;line-height:1.2">${esc(c.name)}</h3>
-      ${c.explanation?`<p style="margin:0 0 6px;font-size:${big?'15px':'14px'};line-height:1.6;color:#33312a">${esc(c.explanation)}</p>`:''}</div>
-    ${srcBox}${actions}</div>`;
+function refNote(rn){
+  const s=rn.source||{};
+  return `<div class="card" style="margin-top:12px;padding:12px 15px;background:rgba(246,241,228,.55)"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="pill" style="background:var(--amber-t);color:var(--amber-d)">FROM MY REFERENCE NOTES</span><span class="serif" style="font-size:14px;font-weight:600">${esc(rn.subject)}</span></div><div style="font-size:12.5px;line-height:1.5;color:#46503e">My offline notes' closest match for these signs is <strong>${esc(rn.subject)}</strong> — worth checking against what I said above and against what you actually see. <span style="color:var(--muted)">(${esc(s.origin||'reference')}${s.title?' — '+esc(s.title):''}, bundled ${ASOF}; confirm locally.)</span></div></div>`;
 }
-
+function dxSources(t){
+  const rel=t.related||[]; if(!rel.length) return '';
+  const key='src'+((S.dxTurns||[]).indexOf(t)); const open=S.srcOpen[key];
+  const items=rel.map(s=>`<div style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:7px"><span class="pill" style="color:#fff;background:#8a857a">${esc(s.origin)}</span><span style="font-size:12.5px;font-weight:600">${esc(s.title)}</span></div><div style="font-size:12px;color:var(--muted);line-height:1.45;border-left:2px solid var(--line);padding-left:10px;margin-top:4px">"${esc(s.snippet)}"</div></div>`).join('');
+  return `<div class="no-print" style="margin-top:12px"><button onclick="A.toggleSrc('${key}')" class="mono" style="font-size:11px;font-weight:600;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer">${open?'▾':'▸'} reference notes I could check (${rel.length}, bundled ${ASOF})</button>${open?`<div class="card" style="margin-top:9px;padding:14px 16px;background:rgba(246,241,228,.5)">${items}<div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">Offline reference notes bundled ${ASOF}. I reason from my own knowledge; these are what you can open to verify. Confirm time-sensitive things (rates, prices, new varieties) locally.</div></div>`:''}</div>`;
+}
 //==================== CASES ====================
 function cases(){
   return `<section style="flex:1;overflow-y:auto"><div style="max-width:900px;margin:0 auto;padding:36px 40px">
@@ -379,44 +374,48 @@ function cases(){
   </div></section>`;
 }
 
-// clean, farmer-facing printable advisory (the take-home artifact)
+// clean, farmer-facing printable advisory (the take-home artifact) — built from the
+// saved conversation: the farmer's reports + the officer's final committed assessment.
 function advisory(dx, meta){
-  const top=(dx.causes&&dx.causes[0])||{};
-  const doList=(top.actions||[]).map(a=>`<li style="margin-bottom:4px">${esc(a)}</li>`).join('');
-  const alts=(dx.causes||[]).slice(1).map(c=>esc(c.name)).filter(Boolean).join('; ');
-  const s=top.sources&&top.sources[0];
-  const cite=s?`Source: ${esc(s.origin)} — ${esc(s.title)} (bundled ${ASOF})`:'';
+  const turns=(dx&&dx.turns)||[];
+  const farmerMsgs=turns.filter(t=>t.role==='farmer').map(t=>t.content);
+  const officer=turns.filter(t=>t.role==='officer');
+  const committed=[...officer].reverse().find(t=>!t.asked)||officer[officer.length-1]||{};
+  const ref=committed.reference_note;
   return `<div style="max-width:680px;margin:0 auto;font-family:'Spectral',Georgia,serif;color:#1a1a1a">
     <div style="border-bottom:2px solid #2F6B43;padding-bottom:8px;margin-bottom:14px">
       <div style="font-size:22px;font-weight:700">AgriDoc — Farmer Advisory</div>
       <div style="font-size:12px;color:#555">${esc(meta.crop||'')}${meta.crop?' · ':''}${new Date(meta.date).toLocaleDateString()} · prepared by ${esc(meta.who||'AgriDoc')}</div>
     </div>
-    ${meta.symptom?`<p style="font-size:13px;margin:0 0 10px"><strong>What was reported:</strong> ${esc(meta.symptom)}</p>`:''}
-    <h2 style="font-size:17px;margin:12px 0 4px">Most likely: ${esc(top.name||'—')}</h2>
-    ${top.explanation?`<p style="font-size:13px;margin:0 0 8px;line-height:1.5">${esc(top.explanation)}</p>`:''}
-    ${doList?`<p style="font-size:13px;font-weight:700;margin:8px 0 2px">What to do / check:</p><ul style="font-size:13px;margin:0 0 8px;padding-left:20px;line-height:1.5">${doList}</ul>`:''}
-    ${dx.ask?`<p style="font-size:13px;margin:0 0 8px"><strong>To be sure, check:</strong> ${esc(dx.ask)}</p>`:''}
-    ${alts?`<p style="font-size:12px;color:#555;margin:0 0 8px"><strong>Also consider:</strong> ${alts}</p>`:''}
-    ${cite?`<p style="font-size:11px;color:#666;margin:6px 0 0">${cite}</p>`:''}
+    ${farmerMsgs.length?`<p style="font-size:13px;margin:0 0 12px"><strong>What was reported:</strong> ${esc(farmerMsgs.join('  —  '))}</p>`:''}
+    <h2 style="font-size:16px;margin:12px 0 6px">Assessment</h2>
+    <div style="font-size:13px;line-height:1.55;white-space:pre-wrap;margin:0 0 10px">${esc(committed.content||'—')}</div>
+    ${ref?`<p style="font-size:12px;color:#555;margin:0 0 8px"><strong>Reference note to check:</strong> ${esc(ref.subject)}${ref.source&&ref.source.origin?' ('+esc(ref.source.origin)+', bundled '+ASOF+')':''}</p>`:''}
     <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:8px;font-size:10.5px;color:#666;line-height:1.5">
       Prepared offline by AgriDoc, an AI assistant (knowledge as of ${ASOF}). First-line guidance only — not a substitute for a qualified agronomist or veterinarian. Confirm anything time-sensitive (pesticide/medicine rates, prices, new varieties) with your local extension officer and follow product labels. Never use a chemical dose this advisory did not give.
     </div></div>`;
 }
 function caseDetail(){
   const c=S.cases[S.caseView]; if(!c) return cases();
-  const dx=c.dx||{causes:[{name:c.diagnosis||'—',rank:'most_likely',grounding:c.grounding||'reasoning'}],ask:''};
-  const cards=(dx.causes||[]).map((x,i)=>dxCard(x,i)).join('');
-  const meta={crop:c.crop,date:c.ts,who:S.user.name,symptom:c.symptom};
+  const turns=c.turns||[];
+  const thread=turns.map(t=> t.role==='farmer'?farmerBubbleRO(t):officerBlockRO(t)).join('');
+  const meta={crop:c.crop,date:c.ts,who:S.user.name};
   return `<section style="flex:1;overflow-y:auto"><div style="max-width:720px;margin:0 auto;padding:24px 36px 40px">
     <button onclick="A.go('cases')" class="no-print" style="background:transparent;border:none;color:var(--muted);font-size:13px;font-weight:600;margin-bottom:10px;cursor:pointer">← Case records</button>
     <h1 class="serif" style="margin:0 0 2px;font-size:24px;font-weight:700">${esc(c.diagnosis||'Saved case')}</h1>
     <p style="margin:0 0 18px;font-size:12.5px;color:var(--muted)">${esc(c.crop||'')} · ${new Date(c.ts).toLocaleString()}</p>
-    ${c.symptom?`<div class="card" style="padding:13px 16px;margin-bottom:16px;background:rgba(246,241,228,.5)"><div class="mono" style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px">WHAT WAS REPORTED</div><div style="font-size:13.5px;line-height:1.5;color:#33312a">${esc(c.symptom)}</div></div>`:''}
-    ${cards}
-    ${dx.ask?`<div class="card" style="padding:14px 18px;margin-bottom:16px;background:linear-gradient(180deg,#F6F1E4,var(--card))"><span class="serif" style="font-size:15px;font-weight:600">To narrow it down: </span><span style="font-size:14px">${esc(dx.ask)}</span></div>`:''}
-    <div class="no-print" style="display:flex;gap:9px;padding-top:14px;border-top:1px solid var(--line)"><button onclick="window.print()" class="btn-green" style="padding:10px 16px;font-size:13.5px">⤓ Print farmer advisory</button></div>
-    <div class="print-doc">${advisory(dx,meta)}</div>
+    ${thread||`<div class="card" style="padding:20px;color:var(--muted)">This case has no saved conversation.</div>`}
+    <div class="no-print" style="display:flex;gap:9px;padding-top:14px;margin-top:8px;border-top:1px solid var(--line)"><button onclick="window.print()" class="btn-green" style="padding:10px 16px;font-size:13.5px">⤓ Print farmer advisory</button></div>
+    <div class="print-doc">${advisory({turns:turns},meta)}</div>
   </div></section>`;
+}
+// read-only thread renderers for a saved case (no answer box / no save buttons)
+function farmerBubbleRO(t){ return farmerBubble(t); }
+function officerBlockRO(t){
+  return `<div style="margin:16px 0"><div class="mono" style="font-size:10.5px;font-weight:700;color:var(--green-d);margin-bottom:6px">● AGRIDOC${t.asked?' · asked a question':''}</div>
+    <div style="white-space:pre-wrap;font-size:15px;line-height:1.65;color:#33312a;font-family:'Spectral',Georgia,serif">${esc(t.content)}</div>
+    ${t.reference_note?refNote(t.reference_note):''}
+  </div>`;
 }
 
 //==================== KB / LIBRARY ====================
@@ -447,7 +446,7 @@ function render(){
 
 //==================== handlers ====================
 const A = {
-  go, newDx(){ S.intake={crop:'',stage:'',part:'',symptom:''}; S.dx=null; S.dxState='empty'; S.ticks={}; S.srcOpen={}; S.error=''; go('diagnose'); },
+  go, newDx(){ S.intake={crop:'',stage:'',part:'',symptom:''}; S.dxTurns=[]; S.dx=null; S.dxState='empty'; S.ticks={}; S.srcOpen={}; S.error=''; S.live=''; go('diagnose'); },
   setName(v){ S.user.name=v; A.refreshNext(); }, setRole(r){ S.user.role=r; render(); },
   setRegion(v){ S.user.region=v; render(); }, toggleCrop(c){ const i=S.user.crops.indexOf(c); i<0?S.user.crops.push(c):S.user.crops.splice(i,1); render(); },
   addCrop(v){ v=(v||'').trim(); if(v&&!S.user.crops.includes(v)) S.user.crops.push(v); render(); },
@@ -460,13 +459,28 @@ const A = {
   refreshRun(){ const can=S.intake.symptom.trim().length>=8; const b=document.getElementById('runBtn'); if(b){b.disabled=!can; b.style.opacity=can?1:.4;} const h=document.getElementById('runHint'); if(h) h.style.display=can?'none':'block'; },
   tryExample(ex){ S.intake.symptom=ex; S.error=''; render(); },
   setIntakeCropText(v){ S.intake.crop=(v||'').trim(); render(); },
-  async runDx(){
-    S.dxState='loading'; S.error=''; S.ticks={}; S.srcOpen={}; S.dx=null; S.live=''; render();
+  runDx(){
+    let m=S.intake.symptom.trim();
+    const extra=[cropLabel(S.intake.crop), S.intake.stage, S.intake.part].filter(Boolean);
+    if(extra.length) m += ` (${extra.join(', ')})`;
+    if(!m) return;
+    S.dxTurns=[{role:'farmer', content:m}]; S.srcOpen={};
+    A._sendDx();
+  },
+  answerDx(){
+    const el=document.getElementById('dxAnswer'); const ans=(el?el.value:'').trim();
+    if(!ans) return;
+    S.dxTurns.push({role:'farmer', content:ans});
+    A._sendDx();
+  },
+  async _sendDx(){
+    S.dxState='loading'; S.error=''; S.live=''; render();
     try{
-      const r = await fetch(API+'/diagnose',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({crop:cropLabel(S.intake.crop), growth_stage:S.intake.stage, affected_part:S.intake.part, symptom:S.intake.symptom})});
+      const history=(S.dxTurns||[]).map(t=>({role: t.role==='officer'?'assistant':'user', content:t.content}));
+      const profile=farmProfile();
+      const r = await fetch(API+'/diagnose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({history, profile})});
       if(!r.ok){ const e=await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error||('HTTP '+r.status)); }
-      const reader=r.body.getReader(), dec=new TextDecoder(); let buf='';
+      const reader=r.body.getReader(), dec=new TextDecoder(); let buf='', result=null;
       for(;;){
         const {done,value}=await reader.read(); if(done) break;
         buf+=dec.decode(value,{stream:true});
@@ -476,23 +490,28 @@ const A = {
           if(!line) continue;
           const ev=JSON.parse(line.slice(5).trim());
           if(ev.type==='token'){ S.live+=ev.text; updateLive(); }
-          else if(ev.type==='result'){ S.dx=ev.result; S.dxState='result'; }
+          else if(ev.type==='result'){ result=ev.result; }
           else if(ev.type==='error'){ throw new Error(ev.error); }
         }
       }
-      if(!S.dx) throw new Error('No diagnosis returned — the model may have timed out.');
-    }catch(e){ S.error=e.message; S.dxState='empty'; }
+      if(!result) throw new Error('No reply — the model may have timed out.');
+      S.dxTurns.push({role:'officer', content:result.text||result.raw||'', asked:!!result.asked, reference_note:result.reference_note||null, related:result.related||[]});
+      S.dxState='result'; S.live='';
+    }catch(e){ S.error=e.message; S.dxState='result'; S.live=''; }
     render();
   },
   tick(k){ S.ticks[k]=!S.ticks[k]; render(); },
   toggleSrc(k){ S.srcOpen[k]=!S.srcOpen[k]; render(); },
   saveCase(){
-    const dx=S.dx||{causes:[]}; const top=dx.causes[0]||{};
-    S.cases.unshift({ts:Date.now(), crop:cropLabel(S.intake.crop)||'', region:S.user.region||'', symptom:S.intake.symptom, diagnosis:top.name||'', grounding:top.grounding||'reasoning', dx:dx, followup:false});
+    const turns=S.dxTurns||[];
+    const committed=[...turns].reverse().find(t=>t.role==='officer'&&!t.asked)||{};
+    const firstFarmer=(turns.find(t=>t.role==='farmer')||{}).content||'';
+    const summary=(((committed.content||'').split(/\n/)[0])||'').slice(0,90) || 'Advisory';
+    S.cases.unshift({ts:Date.now(), crop:cropLabel(S.intake.crop)||'', region:S.user.region||'', symptom:firstFarmer, diagnosis:summary, turns:turns});
     persist(); go('cases');
   },
   openCase(i){ S.caseView=i; go('case'); },
-  escalateDx(){ S.intake={crop:'',stage:'',part:'',symptom:S.kbq||''}; S.dx=null; S.dxState='empty'; S.ticks={}; S.srcOpen={}; S.error=''; S.live=''; go('diagnose'); },
+  escalateDx(){ S.intake={crop:'',stage:'',part:'',symptom:S.kbq||''}; S.dxTurns=[]; S.dx=null; S.dxState='empty'; S.ticks={}; S.srcOpen={}; S.error=''; S.live=''; go('diagnose'); },
   async kbSearch(q){
     q=(q||'').trim(); if(!q) return;
     S.kbq=q; S.kbState='loading'; S.kbError=''; S.kbResult=null; render();

@@ -126,21 +126,31 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length) or b"{}")
             # /diagnose accepts structured intake (crop/stage/part/symptom) or a question
             question = (payload.get("question") or build_query(payload)).strip()
-            if not question:
-                self._send(400, {"error": "missing 'question' or intake fields"})
+            # A continuing case carries the prior turns; the fresh case carries just a question.
+            history = payload.get("history")
+            profile = payload.get("profile")
+            has_turn = question or (isinstance(history, list) and any(
+                (t.get("content") or "").strip() for t in history))
+            if not has_turn:
+                self._send(400, {"error": "missing 'question', intake fields, or 'history'"})
                 return
             if not llm.health(LLM_SERVER):
                 self._send(503, {"error": f"no LLM server at {LLM_SERVER}"})
                 return
             if route == "/diagnose":
-                self._stream_diagnose(question)
+                conversation = history if isinstance(history, list) and history else question
+                self._stream_diagnose(conversation, profile)
             else:
                 self._send(200, handle_ask(question))
         except Exception as e:  # noqa: BLE001
             self._send(500, {"error": str(e)})
 
-    def _stream_diagnose(self, question: str) -> None:
-        """Stream the diagnosis as SSE so the UI can show reasoning as it's written."""
+    def _stream_diagnose(self, conversation, profile=None) -> None:
+        """Stream the diagnosis as SSE so the UI can show reasoning as it's written.
+
+        `conversation` is either the farmer's problem (str) for a fresh case, or the
+        full list of prior {role, content} turns for a continuing case.
+        """
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -154,7 +164,7 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             for kind, payload in diagnose_mod.diagnose_stream(
-                _PIPELINE.retriever, question, server=LLM_SERVER):
+                _PIPELINE.retriever, conversation, profile=profile, server=LLM_SERVER):
                 if kind == "token":
                     emit({"type": "token", "text": payload})
                 elif kind == "meta":

@@ -35,6 +35,8 @@ def chat(
     max_tokens: int = config.GEN_MAX_TOKENS,
     model: str = "local-gguf",
     timeout: float = config.LLM_TIMEOUT,
+    repeat_penalty: float = config.REPEAT_PENALTY,
+    repeat_last_n: int = config.REPEAT_LAST_N,
 ) -> str:
     """POST a chat completion and return the assistant message content."""
     payload = {
@@ -42,6 +44,8 @@ def chat(
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "repeat_penalty": repeat_penalty,
+        "repeat_last_n": repeat_last_n,
         "stream": False,
     }
     req = urllib.request.Request(
@@ -66,6 +70,8 @@ def chat_stream(
     max_tokens: int = config.GEN_MAX_TOKENS,
     model: str = "local-gguf",
     timeout: float = config.LLM_TIMEOUT,
+    repeat_penalty: float = config.REPEAT_PENALTY,
+    repeat_last_n: int = config.REPEAT_LAST_N,
 ):
     """Yield assistant text deltas as the model generates (SSE from llama-server).
 
@@ -76,6 +82,8 @@ def chat_stream(
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "repeat_penalty": repeat_penalty,
+        "repeat_last_n": repeat_last_n,
         "stream": True,
     }
     req = urllib.request.Request(
