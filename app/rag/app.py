@@ -3,7 +3,7 @@
 Stdlib http.server only (no FastAPI/uvicorn) — keeps the offline, laptop-friendly
 footprint and runs anywhere Python does. The UI calls a single endpoint.
 
-API CONTRACT (locked — see DECISIONS.md DR-0011)
+API CONTRACT (locked)
   GET  /health
       -> 200 {"status":"ok","llm":true|false,"chunks":<int>}
   POST /ask   {"question": "..."}

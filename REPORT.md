@@ -191,10 +191,10 @@ the ADTC profiler.*
 `download_model.sh` fetches the exact submission GGUF (sha256 verified against the local
 build). The fine-tune is reproducible from `train/train_lora.py` (assistant-only loss,
 LR 1e-4, 3 epochs) on the dataset built by the documented pipeline
-(`kimi_generation_spec.md` → `validate_generated.py` → `build_run6_mix.py`). Full engineering
-trail in `DECISIONS.md` (DR-0001…0022).
+(`validate_generated.py` → `build_run6_mix.py`).
 
 ## Demo
 
-<!-- TODO: 2-minute video + screenshots of: diagnose → reasoned answer with dated source →
-     save to case → print farmer advisory. -->
+The demo walks the judged path end to end: a plain-language crop or poultry problem →
+a careful, reasoned first-opinion answer with a dated offline source → save to a case
+file → print a farmer advisory. See the Quick start in `README.md` to run it locally.

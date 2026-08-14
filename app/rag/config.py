@@ -56,14 +56,16 @@ GEN_TEMPERATURE = 0.0   # deterministic + grounded; we do not want creative dosi
 # worst-case latency sane on a ~5–9 tok/s CPU build (the slowest candidate,
 # qwen-1.5b, otherwise runs the full budget and times out).
 GEN_MAX_TOKENS = 384
-# run-7 (Qwen2.5-1.5B) loops badly on multi-turn diagnosis at 1.1 — it re-asks the
+# The 1.5B model loops badly on multi-turn diagnosis at penalty 1.1 — it re-asks the
 # same clarifying question over and over. Two things fix it together (measured on the
 # live gguf, 2026-07-26): a slightly firmer penalty AND a full-context window. llama.cpp
 # only penalises the last `repeat_last_n` tokens (default 64), far weaker than the HF
-# `repetition_penalty` run-7 was gated with (whole sequence) — so whole-sentence loops
-# slipped through the 64-token window. -1 = penalise the entire context, matching the gate.
+# `repetition_penalty` the model was gated with (whole sequence) — so whole-sentence loops
+# slipped through the 64-token window. Penalise the full context window: older llama.cpp
+# accepted -1 for "entire context", but current llama-server rejects -1, so use the concrete
+# size (equals n_ctx for our run) — same effect, valid across versions.
 REPEAT_PENALTY = 1.15
-REPEAT_LAST_N = -1
+REPEAT_LAST_N = 4096
 LLM_TIMEOUT = 300.0     # CPU prefill of ~2–3k-token prompts + slow gen needs headroom
 # Server context window. Top-k chunks + system + question can reach ~2.2k tokens,
 # so 2048 overflows (HTTP 400). 4096 fits prompt + GEN_MAX_TOKENS with margin and

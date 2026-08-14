@@ -97,7 +97,7 @@ async function apiPost(path, body){
   return r.json();
 }
 
-// live reply view: run-7 replies in natural prose, so just stream it with a cursor.
+// live reply view: the model replies in natural prose, so just stream it with a cursor.
 function liveText(raw){
   return esc(raw||'')+'<span style="color:var(--green);animation:blink 1s infinite">▍</span>';
 }
@@ -328,7 +328,7 @@ function diagnose(){
   else if(S.dxTurns&&S.dxTurns.length) work=dxThread();
   return `<section style="flex:1;display:flex;min-height:0">${intake}<div id="work" style="flex:1;min-width:0;overflow-y:auto"><div style="max-width:720px;margin:0 auto;padding:26px 36px 40px">${work}</div></div></section>`;
 }
-// ---- conversational diagnosis (run-7 replies in natural prose, multi-turn) ----
+// ---- conversational diagnosis (the model replies in natural prose, multi-turn) ----
 function dxThread(){
   const turns=S.dxTurns||[];
   const last=turns[turns.length-1];

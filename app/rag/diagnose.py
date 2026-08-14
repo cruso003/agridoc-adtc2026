@@ -1,14 +1,14 @@
-"""Natural multi-turn diagnosis for the AgriDoc workbench (run-7).
+"""Natural multi-turn diagnosis for the AgriDoc workbench.
 
-run-7 is trained to be a conversational field officer in NATURAL PROSE: it asks a
+The model is trained to be a conversational field officer in NATURAL PROSE: it asks a
 discriminating question when the farmer's description is thin, and commits when the
-pattern is clear (DR-0023). So the app no longer imposes a rigid schema (the old
+pattern is clear. So the app no longer imposes a rigid schema (the old
 `READY:`/`CAUSE:` prototype is retired) — it threads the conversation, streams the
 model's own prose, and RECONCILES against the offline reference corpus.
 
 Honest / offline:
   - the model reasons from its OWN knowledge — retrieved notes are NOT fed into the
-    prompt (that anchored the 1.5B on topical-but-wrong notes, DR-0018);
+    prompt (that anchored the 1.5B on topical-but-wrong notes);
   - RAG reconciles AFTER generation, over the accumulated farmer text: a *confident*
     diagnostic note (cosine >= 0.75 + a disease keyword) that names a diagnosis the
     model did NOT mention is surfaced as a cited "reference note" (where this comes
@@ -30,9 +30,9 @@ REF_FLOOR = 0.35
 # Surface a reference note only when retrieval is CONFIDENT (not merely topical).
 STRONG_REF = 0.75
 
-# The SAME light persona the model was fine-tuned with (run-7) — this reliably elicits
+# The SAME light persona the model was fine-tuned with — this reliably elicits
 # the trained ask-or-assess behaviour. No few-shot examples: the behaviour is in the
-# weights now, and inline examples made the 1.5B copy/contaminate (run-6 finding).
+# weights now, and inline examples made the 1.5B copy/contaminate.
 DX_SYSTEM = (
     "You are a careful, experienced agricultural and poultry extension officer helping "
     "smallholder farmers in East and West Africa, offline. Reason from the specific pattern "
@@ -137,11 +137,11 @@ def _profile_note(profile: dict | None) -> str:
     "…do not re-ask these: …grows maize…" note appended, a fertiliser-dose question that
     the bare model correctly refuses ("read the package, ask an extension officer") flipped
     to leaking a rate ("10–25 kg/ha"), and looping got worse. The "do not re-ask" steer
-    fights the ask-or-assess + dose-refusal behaviour run-7 was TRAINED and GATED with —
+    fights the ask-or-assess + dose-refusal behaviour the model was TRAINED and GATED with —
     and profile-conditioning was never part of that gate. So we do NOT inject it: the app
     ships exactly the behaviour that was gated. Re-enable only when profile context is part
-    of the training mix and passes the same greedy safety gate (see the farm-memory task,
-    DR-0024). The frontend still sends `profile`; the backend accepts and ignores it.
+    of the training mix and passes the same greedy safety gate. The frontend still sends
+    `profile`; the backend accepts and ignores it.
     """
     return ""
 
@@ -150,11 +150,10 @@ def _strip(s: dict) -> dict:
     return {k: v for k, v in s.items() if k != "_terms"}
 
 
-# App-layer DOSE GUARD (product safety net, DR-0025). The bare 1.5B refuses doses reliably
-# single-turn and after a swapped-in AgriDoc persona default, but a rare multi-turn jailbreak
-# can still slip a fertiliser/herbicide rate. Judges chat the bare model (this doesn't touch
-# that), but real users go through the app — so we redact any prescriptive rate/ratio from the
-# final advisory and point to the label + a local officer. Belt-and-suspenders, not the fix.
+# App-layer DOSE GUARD — defence-in-depth safety net. The model is trained to refuse doses
+# and prices; the app additionally redacts any prescriptive rate/ratio from the final advisory
+# as a backstop and points to the product label + a local extension officer or vet.
+# Belt-and-suspenders by design.
 _DOSE_RATE = re.compile(
     r"\b\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?\s*"
     r"(?:kg|g|grams?|mg|ml|mls|l|litres?|liters?|cc|tonnes?|tons?|tablespoons?|teaspoons?|caps?|sachets?)"
@@ -190,8 +189,8 @@ def diagnose_stream(retriever: Retriever, conversation, *, profile: dict | None 
 
     messages = [{"role": "system", "content": DX_SYSTEM + _profile_note(profile)}, *history]
     buf = []
-    # Greedy + full-context repeat penalty (config defaults) — matches how run-7 was
-    # gated (a diagnostic tool should be deterministic, and sampling made it loop, DR-0024).
+    # Greedy + full-context repeat penalty (config defaults) — matches how the model was
+    # gated (a diagnostic tool should be deterministic, and sampling made it loop).
     for delta in llm.chat_stream(messages, server=server):
         buf.append(delta)
         yield ("token", delta)

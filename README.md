@@ -43,7 +43,7 @@ training/            reproducibility — fine-tune + data-pipeline + eval script
 ## Reproducibility
 The fine-tune is reproducible from `training/train_lora.py` (assistant-only loss, LR 1e-4,
 3 epochs) on a behaviour-first dataset built by the documented pipeline
-(`kimi_generation_spec.md` → `validate_generated.py` → `build_run6_mix.py`) and gated with
+(`validate_generated.py` → `build_run6_mix.py`) and gated with
 `score_eval.py` + `expanded_eval.jsonl`. See REPORT.md for the full 6-run journey.
 
 ## License & acknowledgements
