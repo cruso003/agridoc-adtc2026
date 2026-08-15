@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Fetch the AgriDoc weight (LoRA-fine-tuned Qwen2.5-1.5B, Q4_0 GGUF) into model/.
+# Fetch the AgriDoc weight (LoRA-fine-tuned Qwen3-1.7B, Q4_0 GGUF) into model/.
 # Idempotent, no credentials. Output path must match `_runtime.model_path` in metadata.json.
 #
-# This is our OWN fine-tune of Qwen2.5-1.5B-Instruct: assistant-only-loss SFT that adds
+# This is our OWN fine-tune of Qwen3-1.7B: assistant-only-loss SFT that adds
 # the iterative ask-or-assess behaviour — it ASKS a discriminating question when a symptom is thin
 # (instead of committing to a fabricated detail), commits when the pattern is clear, refuses
 # pesticide/drug/fertiliser doses/rates/prices, and redirects non-poultry livestock to a vet. It
@@ -16,10 +16,10 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_DIR="$HERE/model"
-MODEL_FILE="$MODEL_DIR/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf"
+MODEL_FILE="$MODEL_DIR/AgriDoc-1.7B-Q4_0.gguf"
 
-# Public, credential-free. Source: https://huggingface.co/Cruso003/AgriDoc-Qwen2.5-1.5B-GGUF
-MODEL_URL="${AGRIDOC_MODEL_URL:-https://huggingface.co/Cruso003/AgriDoc-Qwen2.5-1.5B-GGUF/resolve/main/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf}"
+# Public, credential-free. Source: https://huggingface.co/Cruso003/AgriDoc-1.7B-GGUF
+MODEL_URL="${AGRIDOC_MODEL_URL:-https://huggingface.co/Cruso003/AgriDoc-1.7B-GGUF/resolve/main/AgriDoc-1.7B-Q4_0.gguf}"
 
 mkdir -p "$MODEL_DIR"
 if [[ -f "$MODEL_FILE" ]]; then

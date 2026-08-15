@@ -13,7 +13,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 VENV="./.venv/bin/python"
-GGUF="../model/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf"
+GGUF="../model/AgriDoc-1.7B-Q4_0.gguf"
 OLLAMA_URL="http://127.0.0.1:11434"
 MODEL_NAME="local-gguf"   # MUST match the model name the app sends in its payload (llm.py)
 APP_PORT="${AGRIDOC_PORT:-8000}"
