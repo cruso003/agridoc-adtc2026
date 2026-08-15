@@ -56,15 +56,15 @@ GEN_TEMPERATURE = 0.0   # deterministic + grounded; we do not want creative dosi
 # worst-case latency sane on a ~5–9 tok/s CPU build (the slowest candidate,
 # qwen-1.5b, otherwise runs the full budget and times out).
 GEN_MAX_TOKENS = 384
-# The 1.5B model loops badly on multi-turn diagnosis at penalty 1.1 — it re-asks the
-# same clarifying question over and over. Two things fix it together (measured on the
-# live gguf, 2026-07-26): a slightly firmer penalty AND a full-context window. llama.cpp
-# only penalises the last `repeat_last_n` tokens (default 64), far weaker than the HF
-# `repetition_penalty` the model was gated with (whole sequence) — so whole-sentence loops
-# slipped through the 64-token window. Penalise the full context window: older llama.cpp
-# accepted -1 for "entire context", but current llama-server rejects -1, so use the concrete
-# size (equals n_ctx for our run) — same effect, valid across versions.
-REPEAT_PENALTY = 1.15
+# Match how the shipped model was gated so serve == the greedy gate it passed:
+# repetition_penalty 1.1 over the whole sequence (gen_eval.py, greedy). llama.cpp only
+# penalises the last `repeat_last_n` tokens (default 64), so we keep the full context window
+# to reproduce that whole-sequence penalty (current llama-server rejects -1 for "entire
+# context", so use the concrete n_ctx). The old 1.5B needed a firmer 1.15 to suppress
+# multi-turn looping; run-10d (Qwen3-1.7B, EOS-in-loss) stops cleanly and does NOT loop —
+# verified 2026-08-15 on the live gguf at 1.1/4096, 1.1/64 and 1.15/4096 (all finish=stop,
+# zero repeated trigrams) — so 1.15 buys nothing now and only risks dulling fluency.
+REPEAT_PENALTY = 1.1
 REPEAT_LAST_N = 4096
 LLM_TIMEOUT = 300.0     # CPU prefill of ~2–3k-token prompts + slow gen needs headroom
 # Server context window. Top-k chunks + system + question can reach ~2.2k tokens,
