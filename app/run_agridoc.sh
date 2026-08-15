@@ -5,7 +5,7 @@
 set -uo pipefail
 export MSYS_NO_PATHCONV=1   # keep container paths intact under git-bash/MINGW64
 
-GGUF="${GGUF:-C:/dev/agri-doc/adtc-bench-workspace/artifacts/finetuned/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf}"
+GGUF="${GGUF:-C:/dev/agri-doc/adtc-bench-workspace/artifacts/finetuned/AgriDoc-1.7B-Q4_0.gguf}"
 MODELDIR="$(dirname "$GGUF")"; MODELFILE="$(basename "$GGUF")"
 IMG="${IMG:-adtc-profiler:latest}"
 NAME="agridoc-model"

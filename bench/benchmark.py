@@ -8,7 +8,7 @@ Uses llama.cpp's own llama-bench for throughput and a peak-RSS sampler for RAM.
 Run this ON the ADTC Standard Laptop (Ubuntu 22.04, i5/Ryzen5, 8 GB, integrated GPU)
 for the official figures — numbers on other machines are indicative only.
 
-    python benchmark.py --gguf ../model/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf \
+    python benchmark.py --gguf ../model/AgriDoc-1.7B-Q4_0.gguf \
                         --llama-bin /path/to/llama.cpp/build/bin
 
 Notes:
@@ -73,7 +73,7 @@ def peak_ram_mb(cli: str, gguf: str, threads: int, ctx: int) -> float | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--gguf", default="../model/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf")
+    ap.add_argument("--gguf", default="../model/AgriDoc-1.7B-Q4_0.gguf")
     ap.add_argument("--llama-bin", default=os.environ.get("LLAMA_BIN", ""))
     ap.add_argument("--threads", type=int, default=0, help="0 = physical cores")
     ap.add_argument("--ctx", type=int, default=4096)

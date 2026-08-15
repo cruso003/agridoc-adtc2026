@@ -12,22 +12,22 @@
   "cross_disciplinary_pairing": {
     "discipline": "agriculture",
     "load_bearing": true,
-    "description": "AgriDoc pairs a LoRA-fine-tuned Qwen2.5-1.5B (taught extension-officer reasoning: ask a discriminating question when the description is thin instead of guessing, commit when the pattern is clear, refuse pesticide/drug/fertiliser doses, redirect non-poultry livestock to a vet) with load-bearing RAG over a local crop/livestock corpus: the app retrieves and computes grounding from cosine similarity, and every cause is labelled library-backed vs reasoned. Fully offline on an 8 GB laptop via llama.cpp."
+    "description": "AgriDoc pairs a LoRA-fine-tuned Qwen3-1.7B (taught extension-officer reasoning across the full agriculture track — crop, livestock, weather, market: ask a discriminating question when the description is thin instead of guessing, commit when the pattern is clear, give a safe first opinion for livestock and escalate to an animal-health worker, and REFUSE to fabricate a pesticide/fertiliser dose, a market price, or a weather forecast — pointing to the label, local buyers, or an agro-met officer) with load-bearing RAG over a local crop/livestock corpus: the app retrieves and computes grounding from cosine similarity, and every cause is labelled library-backed vs reasoned. Fully offline on an 8 GB laptop via llama.cpp."
   },
   "test_prompts": [
     { "prompt_id": "tp_001", "prompt": "My maize leaves have pale streaks running along the veins and growth is stunted. What is the likely cause and what should I do?" },
     { "prompt_id": "tp_002", "prompt": "My chickens are coughing, have runny eyes, and a few have died suddenly. What could this be and how should I respond?" }
   ],
   "model": {
-    "name": "AgriDoc-Qwen2.5-1.5B-Q4_0",
-    "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+    "name": "AgriDoc-1.7B-Q4_0",
+    "base_model": "Qwen/Qwen3-1.7B",
     "fine_tuned": true,
     "runtime": "llama.cpp",
     "quantization": "GGUF Q4_0",
-    "parameters_estimate": "1.5B",
+    "parameters_estimate": "1.7B",
     "packaging": "binary_bundle"
   },
   "_runtime": {
-    "model_path": "model/AgriDoc-Qwen2.5-1.5B-Q4_0.gguf"
+    "model_path": "model/AgriDoc-1.7B-Q4_0.gguf"
   }
 }
