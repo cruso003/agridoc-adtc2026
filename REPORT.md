@@ -115,7 +115,8 @@ and gated it identically:
 
 Qwen2.5 **trades away disease accuracy to absorb the breadth** (misID 9, vs ~3.5 on the narrow
 run-9cp); **Qwen3 holds it** (misID 3) *and* stays clean on safety and stopping. Its extra
-capability does real work. The cost is ~+0.5 GB RAM (below) — bought genuine coverage + accuracy.
+capability does real work. The cost (below) is ~3 weighted perf/eff points, almost all
+throughput — bought genuine coverage + accuracy.
 
 ### RAG: a two-speed app, honest about being offline
 The model reasons; retrieval (FAISS dense bge-small + BM25 + RRF) validates and extends. When a
@@ -143,20 +144,31 @@ a dated source only when it informed the answer, and never gives a chemical dose
 
 ## Benchmarks
 
-Scalar profiler image (`adtc-profiler`, AVX off), `--cpus=4 --memory=7.5g`,
-`llama-bench -p 512 -n 128`. Host: i7-1165G7.
+**The setup — read the numbers in this frame.** These are measured with the *official*
+`adtc-profiler`, whose Docker image deliberately builds llama.cpp **fully scalar** — `AVX`,
+`AVX2`, `AVX512`, `FMA` and `F16C` all compiled **off**. That is not our choice; it is the
+audit's, so every submission is scored on the same instruction-set floor regardless of the
+grader's CPU. A scalar build has **no SIMD**, so it runs several times slower than any real
+deployment: the figures below are a **worst-case floor**, not the speed a farmer's laptop
+actually sees (llama.cpp auto-selects AVX2/AVX512 at runtime — our own Icelake build generates
+2–3× faster). We report the floor because that is what the leaderboard scores. Run:
+`adtc-profiler run --mode participant --cpus=4 --memory=7.5g` (`llama-bench -p 512 -n 128`), host
+i7-1165G7, not throttled (P_thermal = 0).
 
-| model (Q4_0) | gen t/s | peak RSS | S_perf (t/s÷15) | S_eff ((7−RSS)/7) |
+| model (Q4_0) | gen t/s (scalar floor) | peak RSS | S_perf `min(t/s÷15,1)` | S_eff `(7−RSS)/7` |
 |---|---|---|---|---|
 | Llama-3.2-1B | 12.81 | 0.87 GB | ~85 | ~88 |
-| Qwen2.5-1.5B (run-9cp, fallback) | 10.79 | ~1.05 GB | ~72 | ~85 |
-| **Qwen3-1.7B / AgriDoc (shipped)** | **~tie with the 1.5B** | **~+0.5 GB vs 1.5B** | **~72** | **~78** |
+| Qwen2.5-1.5B (run-9cp, fallback) | 10.79 | 1.05 GB | 72 | 85 |
+| **Qwen3-1.7B / AgriDoc (shipped)** | **9.4** | **1.17 GB** | **63** | **83** |
 
-A same-image A/B bench (both bases, identical settings) showed a **speed tie** and **~+0.5 GB**
-peak RSS for Qwen3 — still comfortably under the 8 GB OOM line, no thermal throttling. The ~1.4
-weighted S_eff points this costs are outweighed by the S_acc gain from covering three sub-domains
-the bare 1.5B used to defer on. *The exact Qwen3 scalar-profiler figures are a pending re-audit;
-the tie/+0.5 GB deltas are from the controlled same-image bench.*
+Against the 1.5 B fallback the shipped 1.7 B costs **~9 S_perf and ~2 S_eff points (~3 weighted)**
+— almost entirely throughput; the extra 0.2 B slows pure-scalar generation, while peak RSS rises
+only ~0.12 GB and stays far under the 8 GB OOM line. *(An AVX same-image bench had suggested a
+speed tie; on the scalar audit build it is not — which is exactly why we measured on the profiler
+rather than trusting the estimate.)* We spend that ~3 points deliberately: the other **50 %** of
+the score (S_acc) rewards covering all four track sub-domains in the *bare* model, which the 1.7 B
+does and the bare 1.5 B defers on (see the controlled A/B). Prompt-processing/prefill is likewise
+slow on the no-SIMD build — not the scored metric; a real AVX deployment prefills far faster.
 
 **Behavioural gate (bare gguf, blind, sampled, single- + multi-turn, adversarial):**
 
