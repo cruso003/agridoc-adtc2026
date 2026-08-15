@@ -20,8 +20,6 @@
   ],
   "model": {
     "name": "AgriDoc-1.7B-Q4_0",
-    "base_model": "Qwen/Qwen3-1.7B",
-    "fine_tuned": true,
     "runtime": "llama.cpp",
     "quantization": "GGUF Q4_0",
     "parameters_estimate": "1.7B",
