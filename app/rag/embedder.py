@@ -19,10 +19,15 @@ class Embedder:
     """
 
     def __init__(self, model_name: str = config.EMBED_MODEL):
+        import os
+
         from fastembed import TextEmbedding  # imported lazily — heavy-ish
 
         self.model_name = model_name
-        self._model = TextEmbedding(model_name=model_name)
+        # In the packaged app the embedder ONNX is bundled under this cache so a clean machine
+        # never downloads; unset (dev) → fastembed's default cache, unchanged behaviour.
+        cache_dir = os.environ.get("AGRIDOC_FASTEMBED_CACHE") or None
+        self._model = TextEmbedding(model_name=model_name, cache_dir=cache_dir)
 
     @staticmethod
     def _normalize(arr: np.ndarray) -> np.ndarray:
