@@ -1,7 +1,7 @@
-# Model weights — never commit these to git
-model/*.gguf
-model/*.bin
-model/*.safetensors
+# Model weights — downloaded by download_model.sh, never committed to git
+*.gguf
+model/*
+!model/.gitkeep
 
 # macOS
 .DS_Store
