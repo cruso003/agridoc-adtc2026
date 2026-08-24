@@ -1,12 +1,12 @@
 {
-  "team_id": "saharasprout-bench",
+  "team_id": "project-agridoc-offline-ai-farm-advisor",
   "domain": "agriculture",
   "language_scope": ["en"],
   "african_alpha_claim": false,
   "budget_laptop_claim": true,
   "submitter": {
     "name": "Geitodyu Henrique Crusoe",
-    "email": "bench@saharasprout.example",
+    "email": "crusoehenrique3@gmail.com",
     "github_handle": "saharasprout"
   },
   "cross_disciplinary_pairing": {
